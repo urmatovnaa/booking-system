@@ -4,7 +4,6 @@ services:
     volumes:
       - .:/var/www/project
     working_dir: /var/www/project
-    command: ["sleep", "infinity"]
     depends_on:
       - mysql
 
