@@ -1,11 +1,12 @@
-version: '3.8'
-
 services:
   php:
     build: .
     volumes:
       - .:/var/www/project
     working_dir: /var/www/project
+    command: ["sleep", "infinity"]
+    depends_on:
+      - mysql
 
   nginx:
     image: nginx:alpine
