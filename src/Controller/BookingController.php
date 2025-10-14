@@ -18,158 +18,150 @@ use Symfony\Component\Validator\Validator\ValidatorInterface;
 class BookingController extends AbstractController
 {
     #[Route("", name: "bookings_index", methods: ["GET"])]
-    public function index(BookingRepository , Request ): JsonResponse
+    public function index(BookingRepository $bookingRepository, Request $request): JsonResponse
     {
-        // Фильтрация по статусу
-         = ->query->get("status");
-         = ->getUser();
+        $status = $request->query->get("status");
+        $user = $this->getUser();
         
-        if () {
-             = ->findBy(["status" => , "user" => ]);
+        if ($status) {
+            $bookings = $bookingRepository->findBy(["status" => $status, "user" => $user]);
         } else {
-             = ->findBy(["user" => ]);
+            $bookings = $bookingRepository->findBy(["user" => $user]);
         }
 
-         = [];
-        foreach ( as ) {
-            [] = [
-                "id" => ->getId(),
+        $data = [];
+        foreach ($bookings as $booking) {
+            $data[] = [
+                "id" => $booking->getId(),
                 "resource" => [
-                    "id" => ->getResource()->getId(),
-                    "name" => ->getResource()->getName()
+                    "id" => $booking->getResource()->getId(),
+                    "name" => $booking->getResource()->getName()
                 ],
-                "startTime" => ->getStartTime()->format("Y-m-d H:i:s"),
-                "endTime" => ->getEndTime()->format("Y-m-d H:i:s"),
-                "status" => ->getStatus(),
-                "createdAt" => ->getCreatedAt()->format("Y-m-d H:i:s"),
-                "updatedAt" => ->getUpdatedAt()->format("Y-m-d H:i:s"),
+                "startTime" => $booking->getStartTime()->format("Y-m-d H:i:s"),
+                "endTime" => $booking->getEndTime()->format("Y-m-d H:i:s"),
+                "status" => $booking->getStatus(),
+                "createdAt" => $booking->getCreatedAt()->format("Y-m-d H:i:s"),
+                "updatedAt" => $booking->getUpdatedAt()->format("Y-m-d H:i:s"),
             ];
         }
 
-        return ->json();
+        return $this->json($data);
     }
 
     #[Route("", name: "bookings_create", methods: ["POST"])]
     public function create(
-        Request ,
-        EntityManagerInterface ,
-        ResourceRepository ,
-        ValidatorInterface 
+        Request $request,
+        EntityManagerInterface $entityManager,
+        ResourceRepository $resourceRepository,
+        ValidatorInterface $validator
     ): JsonResponse {
-         = json_decode(->getContent(), true);
+        $data = json_decode($request->getContent(), true);
 
-        // Проверяем обязательные поля
-        if (!isset(["resourceId"]) || !isset(["startTime"]) || !isset(["endTime"])) {
-            return ->json(["error" => "Resource ID, start time and end time are required"], Response::HTTP_BAD_REQUEST);
+        if (!isset($data["resourceId"]) || !isset($data["startTime"]) || !isset($data["endTime"])) {
+            return $this->json(["error" => "Resource ID, start time and end time are required"], Response::HTTP_BAD_REQUEST);
         }
 
-        // Находим ресурс
-         = ->find(["resourceId"]);
-        if (!) {
-            return ->json(["error" => "Resource not found"], Response::HTTP_NOT_FOUND);
+        $resource = $resourceRepository->find($data["resourceId"]);
+        if (!$resource) {
+            return $this->json(["error" => "Resource not found"], Response::HTTP_NOT_FOUND);
         }
 
-        // Проверяем доступность времени (нет пересечений бронирований)
-         = new \DateTime(["startTime"]);
-         = new \DateTime(["endTime"]);
+        $startTime = new \DateTime($data["startTime"]);
+        $endTime = new \DateTime($data["endTime"]);
 
-         = ->getRepository(Booking::class)
-            ->findOverlappingBooking(, , );
+        $existingBooking = $entityManager->getRepository(Booking::class)
+            ->findOverlappingBooking($resource, $startTime, $endTime);
         
-        if () {
-            return ->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
+        if ($existingBooking) {
+            return $this->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
         }
 
-        // Создаем бронирование
-         = new Booking();
-        ->setResource();
-        ->setUser(->getUser());
-        ->setStartTime();
-        ->setEndTime();
-        ->setStatus(["status"] ?? "confirmed");
+        $booking = new Booking();
+        $booking->setResource($resource);
+        $booking->setUser($this->getUser());
+        $booking->setStartTime($startTime);
+        $booking->setEndTime($endTime);
+        $booking->setStatus($data["status"] ?? "confirmed");
 
-         = ->validate();
-        if (count() > 0) {
-             = [];
-            foreach ( as ) {
-                [] = ->getMessage();
+        $errors = $validator->validate($booking);
+        if (count($errors) > 0) {
+            $errorMessages = [];
+            foreach ($errors as $error) {
+                $errorMessages[] = $error->getMessage();
             }
 
-            return ->json(["errors" => ], Response::HTTP_BAD_REQUEST);
+            return $this->json(["errors" => $errorMessages], Response::HTTP_BAD_REQUEST);
         }
 
-        ->persist();
-        ->flush();
+        $entityManager->persist($booking);
+        $entityManager->flush();
 
-        return ->json([
+        return $this->json([
             "message" => "Booking created successfully",
-            "bookingId" => ->getId()
+            "bookingId" => $booking->getId()
         ], Response::HTTP_CREATED);
     }
 
     #[Route("/{id}", name: "bookings_update", methods: ["PUT"])]
     public function update(
-        Request ,
-        Booking ,
-        EntityManagerInterface ,
-        ValidatorInterface 
+        Request $request,
+        Booking $booking,
+        EntityManagerInterface $entityManager,
+        ValidatorInterface $validator
     ): JsonResponse {
-        // Проверяем что бронирование принадлежит текущему пользователю
-        if (->getUser()->getId() !== ->getUser()->getId()) {
-            return ->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
+        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
+            return $this->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
         }
 
-         = json_decode(->getContent(), true);
+        $data = json_decode($request->getContent(), true);
 
-        if (isset(["startTime"])) {
-            ->setStartTime(new \DateTime(["startTime"]));
+        if (isset($data["startTime"])) {
+            $booking->setStartTime(new \DateTime($data["startTime"]));
         }
-        if (isset(["endTime"])) {
-            ->setEndTime(new \DateTime(["endTime"]));
+        if (isset($data["endTime"])) {
+            $booking->setEndTime(new \DateTime($data["endTime"]));
         }
-        if (isset(["status"])) {
-            ->setStatus(["status"]);
+        if (isset($data["status"])) {
+            $booking->setStatus($data["status"]);
         }
 
-        // Проверяем пересечения при изменении времени
-        if (isset(["startTime"]) || isset(["endTime"])) {
-             = ->getRepository(Booking::class)
-                ->findOverlappingBooking(->getResource(), ->getStartTime(), ->getEndTime(), ->getId());
+        if (isset($data["startTime"]) || isset($data["endTime"])) {
+            $existingBooking = $entityManager->getRepository(Booking::class)
+                ->findOverlappingBooking($booking->getResource(), $booking->getStartTime(), $booking->getEndTime(), $booking->getId());
             
-            if () {
-                return ->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
+            if ($existingBooking) {
+                return $this->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
             }
         }
 
-         = ->validate();
-        if (count() > 0) {
-             = [];
-            foreach ( as ) {
-                [] = ->getMessage();
+        $errors = $validator->validate($booking);
+        if (count($errors) > 0) {
+            $errorMessages = [];
+            foreach ($errors as $error) {
+                $errorMessages[] = $error->getMessage();
             }
 
-            return ->json(["errors" => ], Response::HTTP_BAD_REQUEST);
+            return $this->json(["errors" => $errorMessages], Response::HTTP_BAD_REQUEST);
         }
 
-        ->flush();
+        $entityManager->flush();
 
-        return ->json([
+        return $this->json([
             "message" => "Booking updated successfully",
-            "bookingId" => ->getId()
+            "bookingId" => $booking->getId()
         ]);
     }
 
     #[Route("/{id}", name: "bookings_delete", methods: ["DELETE"])]
-    public function delete(Booking , EntityManagerInterface ): JsonResponse
+    public function delete(Booking $booking, EntityManagerInterface $entityManager): JsonResponse
     {
-        // Проверяем что бронирование принадлежит текущему пользователю
-        if (->getUser()->getId() !== ->getUser()->getId()) {
-            return ->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
+        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
+            return $this->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
         }
 
-        ->remove();
-        ->flush();
+        $entityManager->remove($booking);
+        $entityManager->flush();
 
-        return ->json(["message" => "Booking deleted successfully"]);
+        return $this->json(["message" => "Booking deleted successfully"]);
     }
 }
