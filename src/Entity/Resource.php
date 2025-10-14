@@ -5,7 +5,6 @@ namespace App\Entity;
 use App\Repository\ResourceRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 #[ORM\Entity(repositoryClass: ResourceRepository::class)]
@@ -19,8 +18,18 @@ class Resource
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[ORM\Column(type: 'text', nullable: true)]
     private ?string $description = null;
+
+    #[ORM\Column(length: 20)]
+    private ?string $status = 'active';
+
+    #[ORM\ManyToOne(inversedBy: 'resources')]
+    #[ORM\JoinColumn(nullable: false)]
+    private ?User $user = null;
+
+    #[ORM\OneToMany(mappedBy: 'resource', targetEntity: Booking::class)]
+    private Collection $bookings;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
@@ -28,15 +37,11 @@ class Resource
     #[ORM\Column]
     private ?\DateTimeImmutable $updatedAt = null;
 
-    /**
-     * @var Collection<int, Booking>
-     */
-    #[ORM\OneToMany(targetEntity: Booking::class, mappedBy: 'resource', orphanRemoval: true)]
-    private Collection $bookings;
-
     public function __construct()
     {
         $this->bookings = new ArrayCollection();
+        $this->createdAt = new \DateTimeImmutable();
+        $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function getId(): ?int
@@ -52,7 +57,6 @@ class Resource
     public function setName(string $name): static
     {
         $this->name = $name;
-
         return $this;
     }
 
@@ -64,31 +68,28 @@ class Resource
     public function setDescription(?string $description): static
     {
         $this->description = $description;
-
         return $this;
     }
 
-    public function getCreatedAt(): ?\DateTimeImmutable
+    public function getStatus(): ?string
     {
-        return $this->createdAt;
+        return $this->status;
     }
 
-    public function setCreatedAt(\DateTimeImmutable $createdAt): static
+    public function setStatus(string $status): static
     {
-        $this->createdAt = $createdAt;
-
+        $this->status = $status;
         return $this;
     }
 
-    public function getUpdatedAt(): ?\DateTimeImmutable
+    public function getUser(): ?User
     {
-        return $this->updatedAt;
+        return $this->user;
     }
 
-    public function setUpdatedAt(\DateTimeImmutable $updatedAt): static
+    public function setUser(?User $user): static
     {
-        $this->updatedAt = $updatedAt;
-
+        $this->user = $user;
         return $this;
     }
 
@@ -100,25 +101,19 @@ class Resource
         return $this->bookings;
     }
 
-    public function addBooking(Booking $booking): static
+    public function getCreatedAt(): ?\DateTimeImmutable
     {
-        if (!$this->bookings->contains($booking)) {
-            $this->bookings->add($booking);
-            $booking->setResource($this);
-        }
-
-        return $this;
+        return $this->createdAt;
     }
 
-    public function removeBooking(Booking $booking): static
+    public function getUpdatedAt(): ?\DateTimeImmutable
     {
-        if ($this->bookings->removeElement($booking)) {
-            // set the owning side to null (unless already changed)
-            if ($booking->getResource() === $this) {
-                $booking->setResource(null);
-            }
-        }
+        return $this->updatedAt;
+    }
 
+    public function setUpdatedAt(\DateTimeImmutable $updatedAt): static
+    {
+        $this->updatedAt = $updatedAt;
         return $this;
     }
 }
