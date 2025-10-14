@@ -3,41 +3,38 @@
 namespace App\Repository;
 
 use App\Entity\Booking;
+use App\Entity\Resource;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
-/**
- * @extends ServiceEntityRepository<Booking>
- */
 class BookingRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(ManagerRegistry \$registry)
     {
-        parent::__construct($registry, Booking::class);
+        parent::__construct(\$registry, Booking::class);
     }
 
-//    /**
-//     * @return Booking[] Returns an array of Booking objects
-//     */
-//    public function findByExampleField($value): array
-//    {
-//        return $this->createQueryBuilder('b')
-//            ->andWhere('b.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->orderBy('b.id', 'ASC')
-//            ->setMaxResults(10)
-//            ->getQuery()
-//            ->getResult()
-//        ;
-//    }
+    public function findOverlappingBooking(Resource \$resource, \DateTimeInterface \$startTime, \DateTimeInterface \$endTime, ?int \$excludeBookingId = null): ?Booking
+    {
+        \$qb = \$this->createQueryBuilder(b)
+            ->where(b.resource = :resource)
+            ->andWhere(b.status != :cancelled)
+            ->andWhere((
+                (b.startTime <= :startTime AND b.endTime > :startTime) OR
+                (b.startTime < :endTime AND b.endTime >= :endTime) OR
+                (b.startTime >= :startTime AND b.endTime <= :endTime)
+            ))
+            ->setParameter(resource, \$resource)
+            ->setParameter(startTime, \$startTime)
+            ->setParameter(endTime, \$endTime)
+            ->setParameter(cancelled, cancelled)
+            ->setMaxResults(1);
 
-//    public function findOneBySomeField($value): ?Booking
-//    {
-//        return $this->createQueryBuilder('b')
-//            ->andWhere('b.exampleField = :val')
-//            ->setParameter('val', $value)
-//            ->getQuery()
-//            ->getOneOrNullResult()
-//        ;
-//    }
+        if (\$excludeBookingId) {
+            \$qb->andWhere(b.id != :excludeId)
+               ->setParameter(excludeId, \$excludeBookingId);
+        }
+
+        return \$qb->getQuery()->getOneOrNullResult();
+    }
 }
