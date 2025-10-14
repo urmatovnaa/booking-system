@@ -56,10 +56,24 @@ class ApiAuthController extends AbstractController
         ], Response::HTTP_CREATED);
     }
 
-    // Добавим тестовый метод для проверки
-    #[Route('/api/test', name: 'api_test', methods: ['GET'])]
-    public function test(): JsonResponse
-    {
-        return $this->json(['message' => 'API is working!']);
+    #[Route('/api/login', name: 'api_login', methods: ['POST'])]
+    public function login(
+        #[CurrentUser] ?User $user,
+        JWTTokenManagerInterface $JWTManager
+    ): JsonResponse {
+        if (null === $user) {
+            return $this->json([
+                'error' => 'Invalid credentials'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        return $this->json([
+            'message' => 'Login successful',
+            'token' => $JWTManager->create($user),
+            'user' => [
+                'id' => $user->getId(),
+                'email' => $user->getEmail()
+            ]
+        ]);
     }
 }
