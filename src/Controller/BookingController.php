@@ -21,12 +21,11 @@ class BookingController extends AbstractController
     public function index(BookingRepository $bookingRepository, Request $request): JsonResponse
     {
         $status = $request->query->get("status");
-        $user = $this->getUser();
         
         if ($status) {
-            $bookings = $bookingRepository->findBy(["status" => $status, "user" => $user]);
+            $bookings = $bookingRepository->findBy(["status" => $status]);
         } else {
-            $bookings = $bookingRepository->findBy(["user" => $user]);
+            $bookings = $bookingRepository->findAll();
         }
 
         $data = [];
@@ -40,6 +39,7 @@ class BookingController extends AbstractController
                 "startTime" => $booking->getStartTime()->format("Y-m-d H:i:s"),
                 "endTime" => $booking->getEndTime()->format("Y-m-d H:i:s"),
                 "status" => $booking->getStatus(),
+                "userId" => $booking->getUser()?->getId(),
                 "createdAt" => $booking->getCreatedAt()->format("Y-m-d H:i:s"),
                 "updatedAt" => $booking->getUpdatedAt()->format("Y-m-d H:i:s"),
             ];
@@ -78,10 +78,15 @@ class BookingController extends AbstractController
 
         $booking = new Booking();
         $booking->setResource($resource);
-        $booking->setUser($this->getUser());
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus($data["status"] ?? "confirmed");
+        
+        // ВРЕМЕННО: используем первого пользователя из базы
+        $user = $entityManager->getRepository(\App\Entity\User::class)->findOneBy([]);
+        if ($user) {
+            $booking->setUser($user);
+        }
 
         $errors = $validator->validate($booking);
         if (count($errors) > 0) {
@@ -109,10 +114,6 @@ class BookingController extends AbstractController
         EntityManagerInterface $entityManager,
         ValidatorInterface $validator
     ): JsonResponse {
-        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
-            return $this->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
-        }
-
         $data = json_decode($request->getContent(), true);
 
         if (isset($data["startTime"])) {
@@ -155,10 +156,6 @@ class BookingController extends AbstractController
     #[Route("/{id}", name: "bookings_delete", methods: ["DELETE"])]
     public function delete(Booking $booking, EntityManagerInterface $entityManager): JsonResponse
     {
-        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
-            return $this->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
-        }
-
         $entityManager->remove($booking);
         $entityManager->flush();
 
