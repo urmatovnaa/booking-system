@@ -14,162 +14,162 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
 
-#[Route(/api/bookings)]
+#[Route("/api/bookings")]
 class BookingController extends AbstractController
 {
-    #[Route(, name: bookings_index, methods: [GET])]
-    public function index(BookingRepository $bookingRepository, Request $request): JsonResponse
+    #[Route("", name: "bookings_index", methods: ["GET"])]
+    public function index(BookingRepository , Request ): JsonResponse
     {
         // Фильтрация по статусу
-        $status = $request->query->get(status);
-        $user = $this->getUser();
+         = ->query->get("status");
+         = ->getUser();
         
-        if ($status) {
-            $bookings = $bookingRepository->findBy([status => $status, user => $user]);
+        if () {
+             = ->findBy(["status" => , "user" => ]);
         } else {
-            $bookings = $bookingRepository->findBy([user => $user]);
+             = ->findBy(["user" => ]);
         }
 
-        $data = [];
-        foreach ($bookings as $booking) {
-            $data[] = [
-                id => $booking->getId(),
-                resource => [
-                    id => $booking->getResource()->getId(),
-                    name => $booking->getResource()->getName()
+         = [];
+        foreach ( as ) {
+            [] = [
+                "id" => ->getId(),
+                "resource" => [
+                    "id" => ->getResource()->getId(),
+                    "name" => ->getResource()->getName()
                 ],
-                startTime => $booking->getStartTime()->format(Y-m-d H:i:s),
-                endTime => $booking->getEndTime()->format(Y-m-d H:i:s),
-                status => $booking->getStatus(),
-                createdAt => $booking->getCreatedAt()->format(Y-m-d H:i:s),
-                updatedAt => $booking->getUpdatedAt()->format(Y-m-d H:i:s),
+                "startTime" => ->getStartTime()->format("Y-m-d H:i:s"),
+                "endTime" => ->getEndTime()->format("Y-m-d H:i:s"),
+                "status" => ->getStatus(),
+                "createdAt" => ->getCreatedAt()->format("Y-m-d H:i:s"),
+                "updatedAt" => ->getUpdatedAt()->format("Y-m-d H:i:s"),
             ];
         }
 
-        return $this->json($data);
+        return ->json();
     }
 
-    #[Route(, name: bookings_create, methods: [POST])]
+    #[Route("", name: "bookings_create", methods: ["POST"])]
     public function create(
-        Request $request,
-        EntityManagerInterface $entityManager,
-        ResourceRepository $resourceRepository,
-        ValidatorInterface $validator
+        Request ,
+        EntityManagerInterface ,
+        ResourceRepository ,
+        ValidatorInterface 
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true);
+         = json_decode(->getContent(), true);
 
         // Проверяем обязательные поля
-        if (!isset($data[resourceId]) || !isset($data[startTime]) || !isset($data[endTime])) {
-            return $this->json([error => Resource ID, start time and end time are required], Response::HTTP_BAD_REQUEST);
+        if (!isset(["resourceId"]) || !isset(["startTime"]) || !isset(["endTime"])) {
+            return ->json(["error" => "Resource ID, start time and end time are required"], Response::HTTP_BAD_REQUEST);
         }
 
         // Находим ресурс
-        $resource = $resourceRepository->find($data[resourceId]);
-        if (!$resource) {
-            return $this->json([error => Resource not found], Response::HTTP_NOT_FOUND);
+         = ->find(["resourceId"]);
+        if (!) {
+            return ->json(["error" => "Resource not found"], Response::HTTP_NOT_FOUND);
         }
 
         // Проверяем доступность времени (нет пересечений бронирований)
-        $startTime = new \DateTime($data[startTime]);
-        $endTime = new \DateTime($data[endTime]);
+         = new \DateTime(["startTime"]);
+         = new \DateTime(["endTime"]);
 
-        $existingBooking = $entityManager->getRepository(Booking::class)
-            ->findOverlappingBooking($resource, $startTime, $endTime);
+         = ->getRepository(Booking::class)
+            ->findOverlappingBooking(, , );
         
-        if ($existingBooking) {
-            return $this->json([error => Time slot already booked], Response::HTTP_CONFLICT);
+        if () {
+            return ->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
         }
 
         // Создаем бронирование
-        $booking = new Booking();
-        $booking->setResource($resource);
-        $booking->setUser($this->getUser());
-        $booking->setStartTime($startTime);
-        $booking->setEndTime($endTime);
-        $booking->setStatus($data[status] ?? confirmed);
+         = new Booking();
+        ->setResource();
+        ->setUser(->getUser());
+        ->setStartTime();
+        ->setEndTime();
+        ->setStatus(["status"] ?? "confirmed");
 
-        $errors = $validator->validate($booking);
-        if (count($errors) > 0) {
-            $errorMessages = [];
-            foreach ($errors as $error) {
-                $errorMessages[] = $error->getMessage();
+         = ->validate();
+        if (count() > 0) {
+             = [];
+            foreach ( as ) {
+                [] = ->getMessage();
             }
 
-            return $this->json([errors => $errorMessages], Response::HTTP_BAD_REQUEST);
+            return ->json(["errors" => ], Response::HTTP_BAD_REQUEST);
         }
 
-        $entityManager->persist($booking);
-        $entityManager->flush();
+        ->persist();
+        ->flush();
 
-        return $this->json([
-            message => Booking created successfully,
-            bookingId => $booking->getId()
+        return ->json([
+            "message" => "Booking created successfully",
+            "bookingId" => ->getId()
         ], Response::HTTP_CREATED);
     }
 
-    #[Route(/{id}, name: bookings_update, methods: [PUT])]
+    #[Route("/{id}", name: "bookings_update", methods: ["PUT"])]
     public function update(
-        Request $request,
-        Booking $booking,
-        EntityManagerInterface $entityManager,
-        ValidatorInterface $validator
+        Request ,
+        Booking ,
+        EntityManagerInterface ,
+        ValidatorInterface 
     ): JsonResponse {
         // Проверяем что бронирование принадлежит текущему пользователю
-        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
-            return $this->json([error => Access denied], Response::HTTP_FORBIDDEN);
+        if (->getUser()->getId() !== ->getUser()->getId()) {
+            return ->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
         }
 
-        $data = json_decode($request->getContent(), true);
+         = json_decode(->getContent(), true);
 
-        if (isset($data[startTime])) {
-            $booking->setStartTime(new \DateTime($data[startTime]));
+        if (isset(["startTime"])) {
+            ->setStartTime(new \DateTime(["startTime"]));
         }
-        if (isset($data[endTime])) {
-            $booking->setEndTime(new \DateTime($data[endTime]));
+        if (isset(["endTime"])) {
+            ->setEndTime(new \DateTime(["endTime"]));
         }
-        if (isset($data[status])) {
-            $booking->setStatus($data[status]);
+        if (isset(["status"])) {
+            ->setStatus(["status"]);
         }
 
         // Проверяем пересечения при изменении времени
-        if (isset($data[startTime]) || isset($data[endTime])) {
-            $existingBooking = $entityManager->getRepository(Booking::class)
-                ->findOverlappingBooking($booking->getResource(), $booking->getStartTime(), $booking->getEndTime(), $booking->getId());
+        if (isset(["startTime"]) || isset(["endTime"])) {
+             = ->getRepository(Booking::class)
+                ->findOverlappingBooking(->getResource(), ->getStartTime(), ->getEndTime(), ->getId());
             
-            if ($existingBooking) {
-                return $this->json([error => Time slot already booked], Response::HTTP_CONFLICT);
+            if () {
+                return ->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
             }
         }
 
-        $errors = $validator->validate($booking);
-        if (count($errors) > 0) {
-            $errorMessages = [];
-            foreach ($errors as $error) {
-                $errorMessages[] = $error->getMessage();
+         = ->validate();
+        if (count() > 0) {
+             = [];
+            foreach ( as ) {
+                [] = ->getMessage();
             }
 
-            return $this->json([errors => $errorMessages], Response::HTTP_BAD_REQUEST);
+            return ->json(["errors" => ], Response::HTTP_BAD_REQUEST);
         }
 
-        $entityManager->flush();
+        ->flush();
 
-        return $this->json([
-            message => Booking updated successfully,
-            bookingId => $booking->getId()
+        return ->json([
+            "message" => "Booking updated successfully",
+            "bookingId" => ->getId()
         ]);
     }
 
-    #[Route(/{id}, name: bookings_delete, methods: [DELETE])]
-    public function delete(Booking $booking, EntityManagerInterface $entityManager): JsonResponse
+    #[Route("/{id}", name: "bookings_delete", methods: ["DELETE"])]
+    public function delete(Booking , EntityManagerInterface ): JsonResponse
     {
         // Проверяем что бронирование принадлежит текущему пользователю
-        if ($booking->getUser()->getId() !== $this->getUser()->getId()) {
-            return $this->json([error => Access denied], Response::HTTP_FORBIDDEN);
+        if (->getUser()->getId() !== ->getUser()->getId()) {
+            return ->json(["error" => "Access denied"], Response::HTTP_FORBIDDEN);
         }
 
-        $entityManager->remove($booking);
-        $entityManager->flush();
+        ->remove();
+        ->flush();
 
-        return $this->json([message => Booking deleted successfully]);
+        return ->json(["message" => "Booking deleted successfully"]);
     }
 }
