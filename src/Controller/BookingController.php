@@ -76,17 +76,18 @@ class BookingController extends AbstractController
             return $this->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
         }
 
+        // Получаем текущего аутентифицированного пользователя
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
+        }
+
         $booking = new Booking();
         $booking->setResource($resource);
+        $booking->setUser($user); // Устанавливаем текущего пользователя
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus($data["status"] ?? "confirmed");
-        
-        // ВРЕМЕННО: используем первого пользователя из базы
-        $user = $entityManager->getRepository(\App\Entity\User::class)->findOneBy([]);
-        if ($user) {
-            $booking->setUser($user);
-        }
 
         $errors = $validator->validate($booking);
         if (count($errors) > 0) {
