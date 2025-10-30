@@ -81,38 +81,4 @@ class ApiAuthController extends AbstractController
             ]
         ]);
     }
-
-    #[Route("/api/simple-auth", name: "api_simple_auth", methods: ["POST"])]
-    public function simpleAuth(
-        Request $request,
-        EntityManagerInterface $entityManager,
-        UserPasswordHasherInterface $passwordHasher
-    ): JsonResponse {
-        $data = json_decode($request->getContent(), true);
-        
-        if (!isset($data["email"]) || !isset($data["password"])) {
-            return $this->json(["error" => "Email and password are required"], Response::HTTP_BAD_REQUEST);
-        }
-
-        // Ищем пользователя
-        $user = $entityManager->getRepository(User::class)->findOneBy(["email" => $data["email"]]);
-        
-        if (!$user) {
-            return $this->json(["error" => "User not found"], Response::HTTP_UNAUTHORIZED);
-        }
-
-        // Проверяем пароль
-        if (!$passwordHasher->isPasswordValid($user, $data["password"])) {
-            return $this->json(["error" => "Invalid password"], Response::HTTP_UNAUTHORIZED);
-        }
-
-        // Простой ответ без JWT
-        return $this->json([
-            "message" => "Auth successful",
-            "user" => [
-                "id" => $user->getId(),
-                "email" => $user->getEmail()
-            ]
-        ]);
-    }
 }
