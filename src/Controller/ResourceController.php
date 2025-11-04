@@ -3,14 +3,18 @@
 namespace App\Controller;
 
 use App\Entity\Resource;
+use App\Entity\User;
 use App\Repository\ResourceRepository;
+
 use Doctrine\ORM\EntityManagerInterface;
+
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 #[Route("/api/resources")]
 class ResourceController extends AbstractController
@@ -18,12 +22,15 @@ class ResourceController extends AbstractController
     #[Route("", name: "resources_index", methods: ["GET"])]
     public function index(ResourceRepository $resourceRepository, Request $request): JsonResponse
     {
+        /** @var User $user */
+        $user = $this->getUser();
+        
         $status = $request->query->get("status");
         
         if ($status) {
-            $resources = $resourceRepository->findBy(["status" => $status]);
+            $resources = $resourceRepository->findBy(["status" => $status, "user" => $user]);
         } else {
-            $resources = $resourceRepository->findAll();
+            $resources = $resourceRepository->findBy(["user" => $user]);
         }
 
         $data = [];
@@ -48,18 +55,20 @@ class ResourceController extends AbstractController
         EntityManagerInterface $entityManager,
         ValidatorInterface $validator
     ): JsonResponse {
+        /** @var User $user */
+        $user = $this->getUser();
+        
+        if (!$user) {
+            return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
+        }
+
         $data = json_decode($request->getContent(), true);
 
         $resource = new Resource();
         $resource->setName($data["name"] ?? "");
         $resource->setDescription($data["description"] ?? null);
         $resource->setStatus($data["status"] ?? "active");
-        
-        // ВРЕМЕННО: создаем первого пользователя или используем существующего
-        $user = $entityManager->getRepository(\App\Entity\User::class)->findOneBy([]);
-        if ($user) {
-            $resource->setUser($user);
-        }
+        $resource->setUser($user); // Привязываем к текущему пользователю
 
         $errors = $validator->validate($resource);
         if (count($errors) > 0) {
@@ -87,6 +96,9 @@ class ResourceController extends AbstractController
         EntityManagerInterface $entityManager,
         ValidatorInterface $validator
     ): JsonResponse {
+
+        $this->checkResourceOwnership($resource);
+
         $data = json_decode($request->getContent(), true);
 
         if (isset($data["name"])) {
@@ -120,9 +132,46 @@ class ResourceController extends AbstractController
     #[Route("/{id}", name: "resources_delete", methods: ["DELETE"])]
     public function delete(Resource $resource, EntityManagerInterface $entityManager): JsonResponse
     {
+        $this->checkResourceOwnership($resource);
+
         $entityManager->remove($resource);
         $entityManager->flush();
 
         return $this->json(["message" => "Resource deleted successfully"]);
+    }
+
+    #[Route("/{id}", name: "resources_show", methods: ["GET"])]
+    public function show(Resource $resource): JsonResponse
+    {
+        $this->checkResourceOwnership($resource);
+
+        $data = [
+            "id" => $resource->getId(),
+            "name" => $resource->getName(),
+            "description" => $resource->getDescription(),
+            "status" => $resource->getStatus(),
+            "userId" => $resource->getUser()?->getId(),
+            "createdAt" => $resource->getCreatedAt()->format("Y-m-d H:i:s"),
+            "updatedAt" => $resource->getUpdatedAt()->format("Y-m-d H:i:s"),
+        ];
+
+        return $this->json($data);
+    }
+
+    //Проверяет, принадлежит ли ресурс текущему пользователю
+    private function checkResourceOwnership(Resource $resource): void
+    {
+        /** @var User $currentUser */
+        $currentUser = $this->getUser();
+        
+        if (!$currentUser) {
+            throw new AccessDeniedException('User not authenticated');
+        }
+
+        $resourceUser = $resource->getUser();
+        
+        if (!$resourceUser || $resourceUser->getId() !== $currentUser->getId()) {
+            throw new AccessDeniedException('You can only access your own resources');
+        }
     }
 }
