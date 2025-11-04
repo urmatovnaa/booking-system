@@ -6,7 +6,9 @@ use App\Entity\Booking;
 use App\Entity\Resource;
 use App\Repository\BookingRepository;
 use App\Repository\ResourceRepository;
+
 use Doctrine\ORM\EntityManagerInterface;
+
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
