@@ -32,7 +32,6 @@
     <span id="authStatus" class="muted">Not authenticated</span>
     <button id="logoutBtn" class="secondary hidden">Logout</button>
   </div>
-  <div class="token" id="tokenPreview"></div>
   </header>
 
 <main>
@@ -103,9 +102,11 @@
   const qs = (s, root = document) => root.querySelector(s);
   const ce = (tag, props = {}) => Object.assign(document.createElement(tag), props);
 
+  // page hint from server
+  window.appPage = '{{ page|default('') }}';
+
   const tokenKey = 'jwt_token';
   const authStatus = qs('#authStatus');
-  const tokenPreview = qs('#tokenPreview');
   const logoutBtn = qs('#logoutBtn');
 
   function getToken() { return localStorage.getItem(tokenKey) || ''; }
@@ -116,7 +117,6 @@
     const t = getToken();
     const authed = Boolean(t);
     authStatus.textContent = authed ? 'Authenticated' : 'Not authenticated';
-    tokenPreview.textContent = authed ? `Token: ${t}` : '';
     logoutBtn.classList.toggle('hidden', !authed);
   }
 
@@ -150,9 +150,9 @@
     const msg = qs('#registerMsg');
     msg.textContent = '';
     try {
-      const data = await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
-      msg.textContent = `Created user #${data.userId} (${data.email})`;
-      msg.className = 'ok';
+      await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
+      // redirect to login after successful registration
+      window.location.href = '/login';
     } catch (err) {
       msg.textContent = err?.data?.error || 'Registration failed';
       msg.className = 'error';
@@ -170,15 +170,15 @@
     try {
       const data = await api('/api/auth', { method: 'POST', auth: false, body: { email, password } });
       setToken(data.token);
-      msg.textContent = 'Login success';
-      msg.className = 'ok';
+      // redirect to bookings after login
+      window.location.href = '/bookings';
     } catch (err) {
       msg.textContent = err?.data?.error || 'Login failed';
       msg.className = 'error';
     }
   });
 
-  logoutBtn.addEventListener('click', () => { clearToken(); });
+  logoutBtn.addEventListener('click', () => { clearToken(); window.location.href = '/login'; });
 
   // Resources
   const resourcesList = qs('#resourcesList');
@@ -212,13 +212,6 @@
   }
 
   qs('#loadResourcesBtn').addEventListener('click', loadResources);
-  qs('#createResourceForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const body = { name: fd.get('name'), status: fd.get('status') || 'active', description: fd.get('description') || null };
-    try { await api('/api/resources', { method: 'POST', body }); e.currentTarget.reset(); await loadResources(); }
-    catch (err) { alert(err?.data?.errors?.join(', ') || err?.data?.error || 'Create failed'); }
-  });
 
   // Bookings
   const bookingsList = qs('#bookingsList');
@@ -261,11 +254,13 @@
     loginSection.classList.toggle('hidden', authed);
     qs('#resourcesSection').classList.toggle('hidden', !authed);
     qs('#bookingsSection').classList.toggle('hidden', !authed);
-    if (authed) { loadResources(); loadBookings(); }
+    if (authed) {
+      if (window.appPage === 'resources') { loadResources(); }
+      else { loadBookings(); }
+    }
   }
   renderAuthState();
   renderPageForAuth();
-  logoutBtn.addEventListener('click', renderPageForAuth);
 </script>
 {% endblock %}
 
