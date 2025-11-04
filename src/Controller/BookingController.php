@@ -23,12 +23,17 @@ class BookingController extends AbstractController
     public function index(BookingRepository $bookingRepository, Request $request): JsonResponse
     {
         $status = $request->query->get("status");
-        
-        if ($status) {
-            $bookings = $bookingRepository->findBy(["status" => $status]);
-        } else {
-            $bookings = $bookingRepository->findAll();
+        $user = $this->getUser();
+        if (!$user) {
+            return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
         }
+
+        $criteria = ["user" => $user];
+        if ($status) {
+            $criteria["status"] = $status;
+        }
+
+        $bookings = $bookingRepository->findBy($criteria, ["startTime" => "DESC"]);
 
         $data = [];
         foreach ($bookings as $booking) {
@@ -117,6 +122,7 @@ class BookingController extends AbstractController
         EntityManagerInterface $entityManager,
         ValidatorInterface $validator
     ): JsonResponse {
+        $this->checkBookingOwnership($booking);
         $data = json_decode($request->getContent(), true);
 
         if (isset($data["startTime"])) {
@@ -159,9 +165,42 @@ class BookingController extends AbstractController
     #[Route("/{id}", name: "bookings_delete", methods: ["DELETE"])]
     public function delete(Booking $booking, EntityManagerInterface $entityManager): JsonResponse
     {
+        $this->checkBookingOwnership($booking);
         $entityManager->remove($booking);
         $entityManager->flush();
 
         return $this->json(["message" => "Booking deleted successfully"]);
+    }
+
+    #[Route("/{id}", name: "bookings_show", methods: ["GET"])]
+    public function show(Booking $booking): JsonResponse
+    {
+        $this->checkBookingOwnership($booking);
+        $data = [
+            "id" => $booking->getId(),
+            "resource" => [
+                "id" => $booking->getResource()->getId(),
+                "name" => $booking->getResource()->getName()
+            ],
+            "startTime" => $booking->getStartTime()->format("Y-m-d H:i:s"),
+            "endTime" => $booking->getEndTime()->format("Y-m-d H:i:s"),
+            "status" => $booking->getStatus(),
+            "userId" => $booking->getUser()?->getId(),
+            "createdAt" => $booking->getCreatedAt()->format("Y-m-d H:i:s"),
+            "updatedAt" => $booking->getUpdatedAt()->format("Y-m-d H:i:s"),
+        ];
+        return $this->json($data);
+    }
+
+    private function checkBookingOwnership(Booking $booking): void
+    {
+        $currentUser = $this->getUser();
+        if (!$currentUser) {
+            throw $this->createAccessDeniedException('User not authenticated');
+        }
+        $bookingUser = $booking->getUser();
+        if (!$bookingUser || $bookingUser->getId() !== $currentUser->getId()) {
+            throw $this->createAccessDeniedException('You can only access your own bookings');
+        }
     }
 }
