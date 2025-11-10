@@ -18,7 +18,8 @@ class ApiAuthController extends AbstractController
     public function register(
         Request $request,
         UserPasswordHasherInterface $passwordHasher,
-        EntityManagerInterface $entityManager
+        EntityManagerInterface $entityManager,
+        JWTTokenManagerInterface $JWTManager // Добавляем JWT менеджер
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
         
@@ -39,13 +40,20 @@ class ApiAuthController extends AbstractController
         $entityManager->persist($user);
         $entityManager->flush();
 
+        // Генерируем токен сразу после регистрации
+        $token = $JWTManager->create($user);
+
         return $this->json([
             "message" => "User registered successfully",
-            "userId" => $user->getId(),
-            "email" => $user->getEmail()
+            "token" => $token, // Возвращаем токен
+            "user" => [
+                "id" => $user->getId(),
+                "email" => $user->getEmail()
+            ]
         ], Response::HTTP_CREATED);
     }
 
+    // Остальной код без изменений...
     #[Route("/api/auth", name: "api_auth", methods: ["POST"])]
     public function auth(
         Request $request,
@@ -59,19 +67,16 @@ class ApiAuthController extends AbstractController
             return $this->json(["error" => "Email and password are required"], Response::HTTP_BAD_REQUEST);
         }
 
-        // Ищем пользователя
         $user = $entityManager->getRepository(User::class)->findOneBy(["email" => $data["email"]]);
         
         if (!$user) {
             return $this->json(["error" => "User not found"], Response::HTTP_UNAUTHORIZED);
         }
 
-        // Проверяем пароль
         if (!$passwordHasher->isPasswordValid($user, $data["password"])) {
             return $this->json(["error" => "Invalid password"], Response::HTTP_UNAUTHORIZED);
         }
 
-        // УСПЕШНЫЙ ЛОГИН с JWT токеном!
         return $this->json([
             "message" => "Login successful! 🎉",
             "token" => $JWTManager->create($user),
