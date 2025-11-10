@@ -4,7 +4,6 @@ namespace App\Controller;
 
 use App\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
-use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -18,8 +17,7 @@ class ApiAuthController extends AbstractController
     public function register(
         Request $request,
         UserPasswordHasherInterface $passwordHasher,
-        EntityManagerInterface $entityManager,
-        JWTTokenManagerInterface $JWTManager // Добавляем JWT менеджер
+        EntityManagerInterface $entityManager
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
         
@@ -40,20 +38,13 @@ class ApiAuthController extends AbstractController
         $entityManager->persist($user);
         $entityManager->flush();
 
-        // Генерируем токен сразу после регистрации
-        $token = $JWTManager->create($user);
-
         return $this->json([
             "message" => "User registered successfully",
-            "token" => $token, // Возвращаем токен
-            "user" => [
-                "id" => $user->getId(),
-                "email" => $user->getEmail()
-            ]
+            "userId" => $user->getId(),
+            "email" => $user->getEmail()
         ], Response::HTTP_CREATED);
     }
 
-    // Остальной код без изменений...
     #[Route("/api/auth", name: "api_auth", methods: ["POST"])]
     public function auth(
         Request $request,
