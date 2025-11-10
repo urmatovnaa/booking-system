@@ -73,6 +73,7 @@
         <option value="inactive">inactive</option>
       </select>
       <button id="loadResourcesBtn" class="secondary">Обновить</button>
+      <a href="/resources/create" style="text-decoration: none;"><button>Добавить ресурс</button></a>
     </div>
     <div id="resourcesList" class="list"></div>
   </section>
@@ -88,6 +89,7 @@
         <option value="cancelled">cancelled</option>
       </select>
       <button id="loadBookingsBtn" class="secondary">Обновить</button>
+      <a href="/bookings/create" style="text-decoration: none;"><button>Добавить бронь</button></a>
     </div>
     <div id="bookingsList" class="list"></div>
   </section>
@@ -249,14 +251,44 @@
   // Initial
   function renderPageForAuth() {
     const authed = Boolean(getToken());
+    const page = window.appPage || '';
+    
+    // If trying to access protected pages without auth, redirect to login
+    if (!authed && (page === 'resources' || page === 'bookings')) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    // Show/hide auth sections
     authChooser.classList.toggle('hidden', authed);
-    registerSection.classList.toggle('hidden', authed);
-    loginSection.classList.toggle('hidden', authed);
-    qs('#resourcesSection').classList.toggle('hidden', !authed);
-    qs('#bookingsSection').classList.toggle('hidden', !authed);
-    if (authed) {
-      if (window.appPage === 'resources') { loadResources(); }
-      else { loadBookings(); }
+    registerSection.classList.toggle('hidden', authed || page !== '');
+    loginSection.classList.toggle('hidden', authed || page !== 'login');
+    
+    // Show/hide content sections based on page and auth
+    const resourcesSection = qs('#resourcesSection');
+    const bookingsSection = qs('#bookingsSection');
+    
+    if (!authed) {
+      // Not authenticated - hide all content sections
+      if (resourcesSection) resourcesSection.classList.add('hidden');
+      if (bookingsSection) bookingsSection.classList.add('hidden');
+    } else {
+      // Authenticated - show appropriate section based on page
+      if (page === 'resources') {
+        if (resourcesSection) resourcesSection.classList.remove('hidden');
+        if (bookingsSection) bookingsSection.classList.add('hidden');
+        loadResources();
+      } else if (page === 'bookings') {
+        if (resourcesSection) resourcesSection.classList.add('hidden');
+        if (bookingsSection) bookingsSection.classList.remove('hidden');
+        loadBookings();
+      } else {
+        // Default page - show both sections
+        if (resourcesSection) resourcesSection.classList.remove('hidden');
+        if (bookingsSection) bookingsSection.classList.remove('hidden');
+        loadResources();
+        loadBookings();
+      }
     }
   }
   renderAuthState();

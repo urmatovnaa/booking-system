@@ -15,7 +15,7 @@
 </style>
 
 <main>
-  <a href="/" class="muted">← Назад</a>
+  <a href="/bookings" class="muted">← Назад к списку</a>
   <h2>Бронь #{{ id }}</h2>
   <section>
     <div id="msg" class="muted"></div>
@@ -34,49 +34,162 @@
 </main>
 
 <script>
-  const id = {{ id }};
-  const token = localStorage.getItem('jwt_token');
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-  const api = async (path, opts={}) => {
-    const res = await fetch(path, { ...opts, headers: { ...headers, ...(opts.headers||{}) } });
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : {};
-    if (!res.ok) throw data;
-    return data;
-  };
-
-  function toLocalInput(dtStr) {
-    // dtStr in "YYYY-MM-DD HH:mm:ss" -> input datetime-local value
-    const d = dtStr?.replace(' ', 'T');
-    return d?.slice(0,16) || '';
-  }
-
-  async function load() {
-    try {
-      const b = await api(`/api/bookings/${id}`);
-      document.getElementById('info').textContent = `Ресурс: ${b.resource?.id} ${b.resource?.name || ''}`;
-      document.getElementById('status').value = b.status || '';
-      document.getElementById('startTime').value = toLocalInput(b.startTime);
-      document.getElementById('endTime').value = toLocalInput(b.endTime);
-    } catch (e) {
-      document.getElementById('msg').textContent = e?.error || 'Failed to load';
+  (function() {
+    'use strict';
+    
+    // Prevent multiple executions
+    const initKey = 'bookingShow_' + {{ id }};
+    if (window[initKey]) {
+      return;
     }
-  }
-  load();
+    window[initKey] = true;
+    
+    const bookingId = {{ id }};
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    const headers = { 
+      'Content-Type': 'application/json', 
+      'Authorization': `Bearer ${token}` 
+    };
+    
+    const bookingShowApi = async (path, opts = {}) => {
+      try {
+        const res = await fetch(path, { 
+          method: opts.method || 'GET',
+          headers: { ...headers, ...(opts.headers || {}) },
+          body: opts.body || undefined
+        });
+        
+        const text = await res.text();
+        let data = {};
+        
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON:', text);
+            data = { raw: text };
+          }
+        }
+        
+        if (!res.ok) {
+          const error = new Error(data.error || 'Request failed');
+          error.data = data;
+          error.status = res.status;
+          throw error;
+        }
+        
+        return data;
+      } catch (e) {
+        if (e.data) throw e;
+        throw { error: e.message || 'Network error', data: {} };
+      }
+    };
 
-  document.getElementById('saveBtn').onclick = async () => {
-    const body = {};
-    const st = document.getElementById('startTime').value;
-    const et = document.getElementById('endTime').value;
-    const status = document.getElementById('status').value;
-    if (st) body.startTime = st; if (et) body.endTime = et; if (status) body.status = status;
-    try { await api(`/api/bookings/${id}`, { method: 'PUT', body: JSON.stringify(body) }); location.href = '/'; }
-    catch(e){ document.getElementById('msg').textContent = e?.error || 'Failed to save'; }
-  };
-  document.getElementById('deleteBtn').onclick = async () => {
-    try { await api(`/api/bookings/${id}`, { method: 'DELETE' }); location.href = '/'; }
-    catch(e){ document.getElementById('msg').textContent = e?.error || 'Failed to delete'; }
-  };
+    function toLocalInput(dtStr) {
+      const d = dtStr?.replace(' ', 'T');
+      return d?.slice(0,16) || '';
+    }
+
+    async function loadBooking() {
+      try {
+        const b = await bookingShowApi(`/api/bookings/${bookingId}`);
+        const infoEl = document.getElementById('info');
+        const statusEl = document.getElementById('status');
+        const startEl = document.getElementById('startTime');
+        const endEl = document.getElementById('endTime');
+        
+        if (infoEl) infoEl.textContent = `Ресурс: ${b.resource?.id} ${b.resource?.name || ''}`;
+        if (statusEl) statusEl.value = b.status || '';
+        if (startEl) startEl.value = toLocalInput(b.startTime);
+        if (endEl) endEl.value = toLocalInput(b.endTime);
+      } catch (e) {
+        const msg = document.getElementById('msg');
+        if (msg) {
+          msg.textContent = e?.data?.error || e?.error || 'Failed to load';
+          msg.className = 'error';
+        }
+      }
+    }
+    loadBooking();
+
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const msg = document.getElementById('msg');
+        const startEl = document.getElementById('startTime');
+        const endEl = document.getElementById('endTime');
+        const statusEl = document.getElementById('status');
+        
+        if (!startEl || !endEl || !statusEl) return;
+        
+        const body = {};
+        const st = startEl.value;
+        const et = endEl.value;
+        const status = statusEl.value;
+        if (st) body.startTime = st;
+        if (et) body.endTime = et;
+        if (status) body.status = status;
+        
+        if (msg) {
+          msg.textContent = 'Сохранение...';
+          msg.className = 'muted';
+        }
+        saveBtn.disabled = true;
+        
+        try {
+          await bookingShowApi(`/api/bookings/${bookingId}`, { 
+            method: 'PUT', 
+            body: JSON.stringify(body) 
+          });
+          window.location.href = '/bookings';
+        } catch(e) {
+          if (msg) {
+            msg.textContent = e?.data?.error || e?.error || 'Failed to save';
+            msg.className = 'error';
+          }
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!confirm('Вы уверены, что хотите удалить эту бронь?')) {
+          return;
+        }
+        
+        const msg = document.getElementById('msg');
+        if (msg) {
+          msg.textContent = 'Удаление...';
+          msg.className = 'muted';
+        }
+        deleteBtn.disabled = true;
+        
+        try {
+          await bookingShowApi(`/api/bookings/${bookingId}`, { method: 'DELETE' });
+          window.location.href = '/bookings';
+        } catch(e) {
+          if (msg) {
+            msg.textContent = e?.data?.error || e?.error || 'Failed to delete';
+            msg.className = 'error';
+          }
+          deleteBtn.disabled = false;
+        }
+      });
+    }
+  })();
 </script>
 {% endblock %}
 

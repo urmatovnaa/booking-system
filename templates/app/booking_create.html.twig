@@ -1,0 +1,193 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Создать бронь{% endblock %}
+
+{% block body %}
+<style>
+  body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #0b1020; color: #e6ebff; }
+  main { padding: 24px; }
+  section { background: #0f1833; border: 1px solid #1a2547; border-radius: 10px; padding: 16px; max-width: 720px; }
+  input, button, select { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
+  button.secondary { background: #0c1430; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+  .muted { color:#93a6ff; font-size:12px; }
+  .error { color: #ff97a0; }
+  .ok { color: #8de78d; }
+  .full-width { width: 100%; }
+</style>
+
+<main>
+  <a href="/bookings" class="muted">← Назад к списку</a>
+  <h2>Создать бронь</h2>
+  <section>
+    <div id="msg" class="muted"></div>
+    <div class="row">
+      <select id="resourceId" class="full-width" required>
+        <option value="">Выберите ресурс...</option>
+      </select>
+    </div>
+    <div class="row">
+      <input id="startTime" type="datetime-local" required style="flex:1;" />
+      <input id="endTime" type="datetime-local" required style="flex:1;" />
+    </div>
+    <div class="row">
+      <select id="status" style="flex:1;">
+        <option value="confirmed">confirmed</option>
+        <option value="pending">pending</option>
+        <option value="cancelled">cancelled</option>
+      </select>
+    </div>
+    <div class="row">
+      <button id="createBtn">Создать</button>
+      <a href="/bookings" style="text-decoration: none;"><button class="secondary">Отмена</button></a>
+    </div>
+  </section>
+</main>
+
+<script>
+  (function() {
+    'use strict';
+    
+    // Prevent multiple executions
+    if (window.bookingCreateInitialized) {
+      return;
+    }
+    window.bookingCreateInitialized = true;
+    
+    const token = localStorage.getItem('jwt_token');
+    if (!token) { 
+      window.location.href = '/login';
+      return;
+    }
+    
+    const headers = { 
+      'Content-Type': 'application/json', 
+      'Authorization': `Bearer ${token}` 
+    };
+    
+    const bookingApi = async (path, opts = {}) => {
+      try {
+        const res = await fetch(path, { 
+          method: opts.method || 'GET',
+          headers: { ...headers, ...(opts.headers || {}) },
+          body: opts.body || undefined
+        });
+        
+        const text = await res.text();
+        let data = {};
+        
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON:', text);
+            data = { raw: text };
+          }
+        }
+        
+        if (!res.ok) {
+          const error = new Error(data.error || 'Request failed');
+          error.data = data;
+          error.status = res.status;
+          throw error;
+        }
+        
+        return data;
+      } catch (e) {
+        if (e.data) throw e;
+        throw { error: e.message || 'Network error', data: {} };
+      }
+    };
+
+    // Load user's resources
+    async function loadResources() {
+      try {
+        const resources = await bookingApi('/api/resources');
+        const select = document.getElementById('resourceId');
+        if (!select) return;
+        select.innerHTML = '<option value="">Выберите ресурс...</option>';
+        for (const r of resources) {
+          const opt = document.createElement('option');
+          opt.value = r.id;
+          opt.textContent = `#${r.id} - ${r.name} (${r.status})`;
+          select.appendChild(opt);
+        }
+      } catch(e) {
+        const msg = document.getElementById('msg');
+        if (msg) {
+          msg.textContent = 'Не удалось загрузить ресурсы';
+          msg.className = 'error';
+        }
+      }
+    }
+    loadResources();
+
+    const createBtn = document.getElementById('createBtn');
+    if (!createBtn) {
+      console.error('Create button not found!');
+      return;
+    }
+
+    createBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const msg = document.getElementById('msg');
+      if (!msg) return;
+      
+      msg.textContent = '';
+      msg.className = 'muted';
+      
+      const resourceId = document.getElementById('resourceId')?.value;
+      const startTime = document.getElementById('startTime')?.value;
+      const endTime = document.getElementById('endTime')?.value;
+      const status = document.getElementById('status')?.value;
+      
+      if (!resourceId || !startTime || !endTime) {
+        msg.textContent = 'Все поля обязательны';
+        msg.className = 'error';
+        return;
+      }
+      
+      const body = {
+        resourceId: Number(resourceId),
+        startTime: startTime,
+        endTime: endTime,
+        status: status || 'confirmed',
+      };
+      
+      msg.textContent = 'Создание...';
+      createBtn.disabled = true;
+      
+      try {
+        console.log('Sending request:', body);
+        const response = await bookingApi('/api/bookings', { 
+          method: 'POST', 
+          body: JSON.stringify(body) 
+        });
+        
+        console.log('Response received:', response);
+        
+        if (response.bookingId) {
+          window.location.href = `/bookings/${response.bookingId}`;
+        } else {
+          msg.textContent = 'Бронь создана, но ID не получен';
+          msg.className = 'error';
+          createBtn.disabled = false;
+        }
+      } catch(error) {
+        console.error('Error creating booking:', error);
+        const errorMsg = error?.data?.error || 
+                        (error?.data?.errors && Array.isArray(error.data.errors) ? error.data.errors.join(', ') : '') ||
+                        error?.error || 
+                        'Ошибка при создании брони';
+        msg.textContent = errorMsg;
+        msg.className = 'error';
+        createBtn.disabled = false;
+      }
+    });
+  })();
+</script>
+{% endblock %}
+

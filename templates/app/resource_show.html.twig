@@ -15,7 +15,7 @@
 </style>
 
 <main>
-  <a href="/" class="muted">← Назад</a>
+  <a href="/resources" class="muted">← Назад к списку</a>
   <h2>Ресурс #{{ id }}</h2>
   <section>
     <div id="msg" class="muted"></div>
@@ -34,42 +34,155 @@
 </main>
 
 <script>
-  const id = {{ id }};
-  const token = localStorage.getItem('jwt_token');
-  const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-  const api = async (path, opts={}) => {
-    const res = await fetch(path, { ...opts, headers: { ...headers, ...(opts.headers||{}) } });
-    const text = await res.text();
-    const data = text ? JSON.parse(text) : {};
-    if (!res.ok) throw data;
-    return data;
-  };
-
-  async function load() {
-    try {
-      const r = await api(`/api/resources/${id}`);
-      document.getElementById('name').value = r.name || '';
-      document.getElementById('status').value = r.status || '';
-      document.getElementById('description').value = r.description || '';
-    } catch (e) {
-      document.getElementById('msg').textContent = e?.error || 'Failed to load';
+  (function() {
+    'use strict';
+    
+    // Prevent multiple executions
+    const initKey = 'resourceShow_' + {{ id }};
+    if (window[initKey]) {
+      return;
     }
-  }
-  load();
-
-  document.getElementById('saveBtn').onclick = async () => {
-    const body = {
-      name: document.getElementById('name').value,
-      status: document.getElementById('status').value,
-      description: document.getElementById('description').value,
+    window[initKey] = true;
+    
+    const resourceId = {{ id }};
+    const token = localStorage.getItem('jwt_token');
+    if (!token) {
+      window.location.href = '/login';
+      return;
+    }
+    
+    const headers = { 
+      'Content-Type': 'application/json', 
+      'Authorization': `Bearer ${token}` 
     };
-    try { await api(`/api/resources/${id}`, { method: 'PUT', body: JSON.stringify(body) }); location.href = '/'; }
-    catch(e){ document.getElementById('msg').textContent = e?.error || (e?.errors||[]).join(', ') || 'Failed to save'; }
-  };
-  document.getElementById('deleteBtn').onclick = async () => {
-    try { await api(`/api/resources/${id}`, { method: 'DELETE' }); location.href = '/'; }
-    catch(e){ document.getElementById('msg').textContent = e?.error || 'Failed to delete'; }
-  };
+    
+    const resourceShowApi = async (path, opts = {}) => {
+      try {
+        const res = await fetch(path, { 
+          method: opts.method || 'GET',
+          headers: { ...headers, ...(opts.headers || {}) },
+          body: opts.body || undefined
+        });
+        
+        const text = await res.text();
+        let data = {};
+        
+        if (text) {
+          try {
+            data = JSON.parse(text);
+          } catch (e) {
+            console.error('Failed to parse JSON:', text);
+            data = { raw: text };
+          }
+        }
+        
+        if (!res.ok) {
+          const error = new Error(data.error || 'Request failed');
+          error.data = data;
+          error.status = res.status;
+          throw error;
+        }
+        
+        return data;
+      } catch (e) {
+        if (e.data) throw e;
+        throw { error: e.message || 'Network error', data: {} };
+      }
+    };
+
+    async function loadResource() {
+      try {
+        const r = await resourceShowApi(`/api/resources/${resourceId}`);
+        const nameEl = document.getElementById('name');
+        const statusEl = document.getElementById('status');
+        const descEl = document.getElementById('description');
+        if (nameEl) nameEl.value = r.name || '';
+        if (statusEl) statusEl.value = r.status || '';
+        if (descEl) descEl.value = r.description || '';
+      } catch (e) {
+        const msg = document.getElementById('msg');
+        if (msg) {
+          msg.textContent = e?.data?.error || e?.error || 'Failed to load';
+          msg.className = 'error';
+        }
+      }
+    }
+    loadResource();
+
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const msg = document.getElementById('msg');
+        const nameEl = document.getElementById('name');
+        const statusEl = document.getElementById('status');
+        const descEl = document.getElementById('description');
+        
+        if (!nameEl || !statusEl || !descEl) return;
+        
+        const body = {
+          name: nameEl.value,
+          status: statusEl.value,
+          description: descEl.value,
+        };
+        
+        if (msg) {
+          msg.textContent = 'Сохранение...';
+          msg.className = 'muted';
+        }
+        saveBtn.disabled = true;
+        
+        try {
+          await resourceShowApi(`/api/resources/${resourceId}`, { 
+            method: 'PUT', 
+            body: JSON.stringify(body) 
+          });
+          window.location.href = '/resources';
+        } catch(e) {
+          if (msg) {
+            msg.textContent = e?.data?.error || 
+                             (e?.data?.errors && Array.isArray(e.data.errors) ? e.data.errors.join(', ') : '') ||
+                             e?.error || 
+                             'Failed to save';
+            msg.className = 'error';
+          }
+          saveBtn.disabled = false;
+        }
+      });
+    }
+
+    const deleteBtn = document.getElementById('deleteBtn');
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (!confirm('Вы уверены, что хотите удалить этот ресурс?')) {
+          return;
+        }
+        
+        const msg = document.getElementById('msg');
+        if (msg) {
+          msg.textContent = 'Удаление...';
+          msg.className = 'muted';
+        }
+        deleteBtn.disabled = true;
+        
+        try {
+          await resourceShowApi(`/api/resources/${resourceId}`, { method: 'DELETE' });
+          window.location.href = '/resources';
+        } catch(e) {
+          if (msg) {
+            msg.textContent = e?.data?.error || e?.error || 'Failed to delete';
+            msg.className = 'error';
+          }
+          deleteBtn.disabled = false;
+        }
+      });
+    }
+  })();
 </script>
 {% endblock %}
 
