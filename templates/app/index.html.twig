@@ -15,7 +15,7 @@
     input, select, button, textarea { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
     button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
     button.secondary { background: #0c1430; }
-    .row { display:flex; gap:8px; align-items:center; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
     .list { display:grid; gap:8px; }
     .card { border:1px solid #203160; border-radius:8px; padding:8px; background:#0b1431; }
     .muted { color:#93a6ff; font-size:12px; }
@@ -24,6 +24,9 @@
     .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .hidden { display:none; }
     footer { padding: 16px 24px; border-top:1px solid #19213c; color:#8aa2ff; font-size:12px; }
+    .nav { display: flex; gap: 12px; margin-bottom: 16px; }
+    .nav a { color: #9fb0ff; text-decoration: none; padding: 8px 16px; border-radius: 6px; border: 1px solid #203160; }
+    .nav a.active { background: #2a47b8; color: white; border-color: #3758d6; }
 </style>
 
 <header>
@@ -32,9 +35,15 @@
     <span id="authStatus" class="muted">Not authenticated</span>
     <button id="logoutBtn" class="secondary hidden">Logout</button>
   </div>
-  </header>
+</header>
 
 <main>
+  <!-- Навигация для авторизованных пользователей -->
+  <nav id="mainNav" class="nav hidden">
+    <a href="/bookings" id="navBookings">Мои бронирования</a>
+    <a href="/resources" id="navResources">Мои ресурсы</a>
+  </nav>
+
   <section id="authChooser">
     <h2>Добро пожаловать</h2>
     <div class="row">
@@ -50,6 +59,10 @@
       <input name="password" type="password" placeholder="Password" required />
       <button type="submit">Создать аккаунт</button>
     </form>
+    <div class="row">
+      <span class="muted">Уже есть аккаунт?</span>
+      <a href="/login" style="color: #9fb0ff;">Войти</a>
+    </div>
     <div id="registerMsg" class="muted"></div>
   </section>
 
@@ -60,12 +73,24 @@
       <input name="password" type="password" placeholder="Password" required />
       <button type="submit">Войти</button>
     </form>
+    <div class="row">
+      <span class="muted">Нет аккаунта?</span>
+      <a href="/register" style="color: #9fb0ff;">Зарегистрироваться</a>
+    </div>
     <div id="loginMsg" class="muted"></div>
   </section>
 
   <section id="resourcesSection" class="hidden">
-    <h2>Мои ресурсы</h2>
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <h2>Мои ресурсы</h2>
+      <a href="/resources/create" style="text-decoration: none;">
+        <button>Добавить ресурс</button>
+      </a>
+    </div>
+    
     <div class="row">
+      <label class="muted">Название:</label>
+      <input id="resourceNameFilter" type="text" placeholder="Фильтр по названию" />
       <label class="muted">Статус:</label>
       <select id="resourceStatus">
         <option value="">Все</option>
@@ -73,13 +98,19 @@
         <option value="inactive">inactive</option>
       </select>
       <button id="loadResourcesBtn" class="secondary">Обновить</button>
-      <a href="/resources/create" style="text-decoration: none;"><button>Добавить ресурс</button></a>
     </div>
+    
     <div id="resourcesList" class="list"></div>
   </section>
 
   <section id="bookingsSection" class="hidden">
-    <h2>Мои брони</h2>
+    <div class="row" style="justify-content: space-between; align-items: center;">
+      <h2>Мои бронирования</h2>
+      <a href="/bookings/create" style="text-decoration: none;">
+        <button>Добавить бронь</button>
+      </a>
+    </div>
+    
     <div class="row">
       <label class="muted">Статус:</label>
       <select id="bookingStatus">
@@ -89,8 +120,8 @@
         <option value="cancelled">cancelled</option>
       </select>
       <button id="loadBookingsBtn" class="secondary">Обновить</button>
-      <a href="/bookings/create" style="text-decoration: none;"><button>Добавить бронь</button></a>
     </div>
+    
     <div id="bookingsList" class="list"></div>
   </section>
 </main>
@@ -98,7 +129,7 @@
 <footer>
   API endpoints used: /api/register, /api/auth, /api/resources, /api/bookings
   <span class="muted">(Authorization: Bearer &lt;token&gt;)</span>
-  </footer>
+</footer>
 
 <script>
   const qs = (s, root = document) => root.querySelector(s);
@@ -110,6 +141,7 @@
   const tokenKey = 'jwt_token';
   const authStatus = qs('#authStatus');
   const logoutBtn = qs('#logoutBtn');
+  const mainNav = qs('#mainNav');
 
   function getToken() { return localStorage.getItem(tokenKey) || ''; }
   function setToken(token) { localStorage.setItem(tokenKey, token); renderAuthState(); }
@@ -120,6 +152,7 @@
     const authed = Boolean(t);
     authStatus.textContent = authed ? 'Authenticated' : 'Not authenticated';
     logoutBtn.classList.toggle('hidden', !authed);
+    mainNav.classList.toggle('hidden', !authed);
   }
 
   async function api(path, { method = 'GET', body, auth = true } = {}) {
@@ -136,15 +169,33 @@
     return data;
   }
 
+  // Highlight active navigation
+  function highlightActiveNav() {
+    const currentPath = window.location.pathname;
+    const navBookings = qs('#navBookings');
+    const navResources = qs('#navResources');
+    
+    if (navBookings) navBookings.classList.toggle('active', currentPath === '/bookings' || currentPath === '/');
+    if (navResources) navResources.classList.toggle('active', currentPath === '/resources');
+  }
+
   // Auth view toggles
   const registerSection = qs('#registerSection');
   const loginSection = qs('#loginSection');
   const authChooser = qs('#authChooser');
-  qs('#showLogin').addEventListener('click', ()=>{ registerSection.classList.add('hidden'); loginSection.classList.remove('hidden'); });
-  qs('#showRegister').addEventListener('click', ()=>{ loginSection.classList.add('hidden'); registerSection.classList.remove('hidden'); });
+  
+  qs('#showLogin')?.addEventListener('click', ()=>{ 
+    registerSection.classList.add('hidden'); 
+    loginSection.classList.remove('hidden'); 
+  });
+  
+  qs('#showRegister')?.addEventListener('click', ()=>{ 
+    loginSection.classList.add('hidden'); 
+    registerSection.classList.remove('hidden'); 
+  });
 
-  // Register
-  qs('#registerForm').addEventListener('submit', async (e) => {
+  // Register - теперь автоматически логинит после регистрации
+  qs('#registerForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const email = fd.get('email');
@@ -152,9 +203,11 @@
     const msg = qs('#registerMsg');
     msg.textContent = '';
     try {
-      await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
-      // redirect to login after successful registration
-      window.location.href = '/login';
+      const data = await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
+      setToken(data.token); // Сохраняем токен
+      msg.textContent = 'Регистрация успешна! Перенаправление...';
+      msg.className = 'ok';
+      setTimeout(() => window.location.href = '/bookings', 1000);
     } catch (err) {
       msg.textContent = err?.data?.error || 'Registration failed';
       msg.className = 'error';
@@ -162,7 +215,7 @@
   });
 
   // Login
-  qs('#loginForm').addEventListener('submit', async (e) => {
+  qs('#loginForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     const email = fd.get('email');
@@ -172,23 +225,38 @@
     try {
       const data = await api('/api/auth', { method: 'POST', auth: false, body: { email, password } });
       setToken(data.token);
-      // redirect to bookings after login
-      window.location.href = '/bookings';
+      msg.textContent = 'Вход успешен! Перенаправление...';
+      msg.className = 'ok';
+      setTimeout(() => window.location.href = '/bookings', 1000);
     } catch (err) {
       msg.textContent = err?.data?.error || 'Login failed';
       msg.className = 'error';
     }
   });
 
-  logoutBtn.addEventListener('click', () => { clearToken(); window.location.href = '/login'; });
+  logoutBtn.addEventListener('click', () => { 
+    clearToken(); 
+    window.location.href = '/login'; 
+  });
 
-  // Resources
+  // Resources - с фильтром по названию
   const resourcesList = qs('#resourcesList');
+  const resourceNameFilter = qs('#resourceNameFilter');
+  
   async function loadResources() {
+    if (!resourcesList) return;
+    
     resourcesList.textContent = 'Loading...';
     try {
       const status = qs('#resourceStatus').value;
-      const items = await api(`/api/resources${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+      const name = resourceNameFilter ? resourceNameFilter.value : '';
+      
+      let url = '/api/resources?';
+      const params = new URLSearchParams();
+      if (status) params.append('status', status);
+      if (name) params.append('name', name);
+      
+      const items = await api(`/api/resources?${params.toString()}`);
       renderResources(items);
     } catch (err) {
       resourcesList.textContent = err?.data?.error || 'Failed to load resources';
@@ -196,6 +264,8 @@
   }
 
   function renderResources(items) {
+    if (!resourcesList) return;
+    
     resourcesList.textContent = '';
     if (!Array.isArray(items) || items.length === 0) {
       resourcesList.append(ce('div', { className: 'muted', textContent: 'No resources yet' }));
@@ -205,7 +275,7 @@
       const card = ce('div', { className: 'card' });
       const title = ce('div', { textContent: `#${r.id} • ${r.name} (${r.status})` });
       const desc = ce('div', { className: 'muted', textContent: r.description || '' });
-      const link = ce('a', { href: `/resources/${r.id}`, textContent: 'Открыть' });
+      const link = ce('a', { href: `/resources/${r.id}`, textContent: 'Открыть', style: 'color: #9fb0ff;' });
       const linkRow = ce('div', { className: 'row' });
       linkRow.append(link);
       card.append(title, desc, linkRow);
@@ -213,11 +283,14 @@
     }
   }
 
-  qs('#loadResourcesBtn').addEventListener('click', loadResources);
+  qs('#loadResourcesBtn')?.addEventListener('click', loadResources);
+  resourceNameFilter?.addEventListener('input', debounce(loadResources, 300));
 
   // Bookings
   const bookingsList = qs('#bookingsList');
   async function loadBookings() {
+    if (!bookingsList) return;
+    
     bookingsList.textContent = 'Loading...';
     try {
       const status = qs('#bookingStatus').value;
@@ -227,7 +300,10 @@
       bookingsList.textContent = err?.data?.error || 'Failed to load bookings';
     }
   }
+  
   function renderBookings(items) {
+    if (!bookingsList) return;
+    
     bookingsList.textContent = '';
     if (!Array.isArray(items) || items.length === 0) {
       bookingsList.append(ce('div', { className: 'muted', textContent: 'No bookings yet' }));
@@ -239,61 +315,67 @@
         ce('div', { textContent: `#${b.id} • res:${b.resource?.id} ${b.resource?.name || ''} • ${b.status}` }),
         ce('div', { className: 'muted', textContent: `${b.startTime} → ${b.endTime}` })
       );
-      const link = ce('a', { href: `/bookings/${b.id}`, textContent: 'Открыть' });
+      const link = ce('a', { href: `/bookings/${b.id}`, textContent: 'Открыть', style: 'color: #9fb0ff;' });
       const linkRow = ce('div', { className: 'row' });
       linkRow.append(link);
       card.append(linkRow);
       bookingsList.append(card);
     }
   }
-  qs('#loadBookingsBtn').addEventListener('click', loadBookings);
+  
+  qs('#loadBookingsBtn')?.addEventListener('click', loadBookings);
 
-  // Initial
-  function renderPageForAuth() {
+  // Debounce function for search
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  // Initial page rendering
+  function renderPage() {
     const authed = Boolean(getToken());
     const page = window.appPage || '';
     
-    // If trying to access protected pages without auth, redirect to login
-    if (!authed && (page === 'resources' || page === 'bookings')) {
+    // Redirect logic
+    if (!authed && (page === 'resources' || page === 'bookings' || page === 'resource_create' || page === 'booking_create' || page === 'resource_show' || page === 'booking_show')) {
       window.location.href = '/login';
       return;
     }
-    
-    // Show/hide auth sections
-    authChooser.classList.toggle('hidden', authed);
-    registerSection.classList.toggle('hidden', authed || page !== '');
-    loginSection.classList.toggle('hidden', authed || page !== 'login');
-    
-    // Show/hide content sections based on page and auth
-    const resourcesSection = qs('#resourcesSection');
-    const bookingsSection = qs('#bookingsSection');
-    
-    if (!authed) {
-      // Not authenticated - hide all content sections
-      if (resourcesSection) resourcesSection.classList.add('hidden');
-      if (bookingsSection) bookingsSection.classList.add('hidden');
-    } else {
-      // Authenticated - show appropriate section based on page
-      if (page === 'resources') {
-        if (resourcesSection) resourcesSection.classList.remove('hidden');
-        if (bookingsSection) bookingsSection.classList.add('hidden');
-        loadResources();
-      } else if (page === 'bookings') {
-        if (resourcesSection) resourcesSection.classList.add('hidden');
-        if (bookingsSection) bookingsSection.classList.remove('hidden');
-        loadBookings();
-      } else {
-        // Default page - show both sections
-        if (resourcesSection) resourcesSection.classList.remove('hidden');
-        if (bookingsSection) bookingsSection.classList.remove('hidden');
-        loadResources();
-        loadBookings();
-      }
+
+    if (authed && (page === 'login' || page === 'register')) {
+      window.location.href = '/bookings';
+      return;
     }
+
+    // Show appropriate sections
+    document.querySelectorAll('section[id$="Section"]').forEach(section => {
+      section.classList.add('hidden');
+    });
+
+    if (page === 'register') {
+      qs('#registerSection')?.classList.remove('hidden');
+    } else if (page === 'login') {
+      qs('#loginSection')?.classList.remove('hidden');
+    } else if (page === 'resources') {
+      qs('#resourcesSection')?.classList.remove('hidden');
+      loadResources();
+    } else if (page === 'bookings' || page === '') {
+      qs('#bookingsSection')?.classList.remove('hidden');
+      loadBookings();
+    }
+
+    highlightActiveNav();
   }
+
+  // Initialize
   renderAuthState();
-  renderPageForAuth();
+  renderPage();
 </script>
 {% endblock %}
-
-
