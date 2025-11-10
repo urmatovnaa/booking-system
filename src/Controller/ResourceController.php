@@ -24,14 +24,31 @@ class ResourceController extends AbstractController
     {
         /** @var User $user */
         $user = $this->getUser();
+        if (!$user) {
+            return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
+        }
         
         $status = $request->query->get("status");
+        $name = $request->query->get("name"); // Новый параметр фильтра по названию
+        
+        // Используем Query Builder для сложных запросов
+        $qb = $resourceRepository->createQueryBuilder('r')
+            ->where('r.user = :user')
+            ->setParameter('user', $user);
         
         if ($status) {
-            $resources = $resourceRepository->findBy(["status" => $status, "user" => $user]);
-        } else {
-            $resources = $resourceRepository->findBy(["user" => $user]);
+            $qb->andWhere('r.status = :status')
+               ->setParameter('status', $status);
         }
+        
+        if ($name) {
+            $qb->andWhere('r.name LIKE :name')
+               ->setParameter('name', '%' . $name . '%');
+        }
+        
+        $qb->orderBy('r.createdAt', 'DESC');
+        
+        $resources = $qb->getQuery()->getResult();
 
         $data = [];
         foreach ($resources as $resource) {
