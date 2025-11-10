@@ -194,7 +194,7 @@
     registerSection.classList.remove('hidden'); 
   });
 
-  // Register - теперь автоматически логинит после регистрации
+  // Register
   qs('#registerForm')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -203,11 +203,10 @@
     const msg = qs('#registerMsg');
     msg.textContent = '';
     try {
-      const data = await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
-      setToken(data.token); // Сохраняем токен
-      msg.textContent = 'Регистрация успешна! Перенаправление...';
+      await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
+      msg.textContent = 'Регистрация успешна! Перенаправление на страницу входа...';
       msg.className = 'ok';
-      setTimeout(() => window.location.href = '/bookings', 1000);
+      setTimeout(() => window.location.href = '/login', 1500);
     } catch (err) {
       msg.textContent = err?.data?.error || 'Registration failed';
       msg.className = 'error';
