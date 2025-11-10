@@ -43,6 +43,18 @@ class FrontendController extends AbstractController
     {
         return $this->render('app/booking_show.html.twig', ['id' => $id]);
     }
+
+    #[Route('/resources/create', name: 'app_resource_create', methods: ['GET'])]
+    public function resourceCreate(): Response
+    {
+        return $this->render('app/resource_create.html.twig');
+    }
+
+    #[Route('/bookings/create', name: 'app_booking_create', methods: ['GET'])]
+    public function bookingCreate(): Response
+    {
+        return $this->render('app/booking_create.html.twig');
+    }
 }
 
 
