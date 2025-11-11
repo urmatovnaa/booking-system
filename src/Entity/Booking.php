@@ -5,8 +5,10 @@ namespace App\Entity;
 use App\Repository\BookingRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: BookingRepository::class)]
+#[ORM\HasLifecycleCallbacks]
 class Booking
 {
     #[ORM\Id]
@@ -16,20 +18,29 @@ class Booking
 
     #[ORM\ManyToOne(inversedBy: 'bookings')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull]
     private ?Resource $resource = null;
 
     #[ORM\ManyToOne(inversedBy: 'bookings')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull]
     private ?User $user = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Assert\NotNull]
+    #[Assert\GreaterThan('now', message: 'Start time must be in the future')]
     private ?\DateTimeInterface $startTime = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Assert\NotNull]
     private ?\DateTimeInterface $endTime = null;
 
     #[ORM\Column(length: 20)]
+    #[Assert\Choice(['confirmed', 'pending', 'cancelled'])]
     private ?string $status = 'confirmed';
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $comment = null;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
@@ -40,6 +51,12 @@ class Booking
     public function __construct()
     {
         $this->createdAt = new \DateTimeImmutable();
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    #[ORM\PreUpdate]
+    public function setUpdatedAtValue(): void
+    {
         $this->updatedAt = new \DateTimeImmutable();
     }
 
@@ -88,6 +105,9 @@ class Booking
 
     public function setEndTime(\DateTimeInterface $endTime): static
     {
+        if ($this->startTime && $endTime <= $this->startTime) {
+            throw new \InvalidArgumentException('End time must be after start time');
+        }
         $this->endTime = $endTime;
         return $this;
     }
@@ -99,7 +119,21 @@ class Booking
 
     public function setStatus(string $status): static
     {
+        if (!in_array($status, ['confirmed', 'pending', 'cancelled'])) {
+            throw new \InvalidArgumentException('Invalid status');
+        }
         $this->status = $status;
+        return $this;
+    }
+
+    public function getComment(): ?string
+    {
+        return $this->comment;
+    }
+
+    public function setComment(?string $comment): static
+    {
+        $this->comment = $comment;
         return $this;
     }
 
@@ -117,5 +151,33 @@ class Booking
     {
         $this->updatedAt = $updatedAt;
         return $this;
+    }
+
+    /**
+     * Проверяет, активна ли бронь (не отменена)
+     */
+    public function isActive(): bool
+    {
+        return $this->status !== 'cancelled';
+    }
+
+    /**
+     * Проверяет, идет ли бронь в данный момент
+     */
+    public function isOngoing(): bool
+    {
+        $now = new \DateTime();
+        return $this->isActive() && 
+               $this->startTime <= $now && 
+               $this->endTime > $now;
+    }
+
+    /**
+     * Проверяет, является ли бронь будущей
+     */
+    public function isFuture(): bool
+    {
+        $now = new \DateTime();
+        return $this->isActive() && $this->startTime > $now;
     }
 }
