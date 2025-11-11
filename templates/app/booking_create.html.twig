@@ -21,7 +21,7 @@
 </style>
 
 <main>
-  <a href="/bookings" class="muted">← Назад к списку</a>
+  <a href="/bookings" class="muted" data-turbo="false">← Назад к списку бронирований</a>
   <h2>Создать бронь</h2>
   <section>
     <div id="msg" class="muted"></div>
@@ -56,7 +56,7 @@
     
     <div class="row">
       <button id="createBtn">Создать</button>
-      <a href="/bookings" style="text-decoration: none;"><button type="button" class="secondary">Отмена</button></a>
+      <button type="button" class="secondary" onclick="window.location.href='/bookings'">Отмена</button>
     </div>
   </section>
 </main>
