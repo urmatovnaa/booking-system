@@ -79,9 +79,12 @@ class BookingController extends AbstractController
             $endTime = new \DateTime($data["endTime"]);
             $now = new \DateTime();
             
-            // Проверка что бронь на будущее
-            if ($startTime < $now) {
-                return $this->json(["error" => "Cannot book in the past"], Response::HTTP_BAD_REQUEST);
+            // Добавляем буфер в 1 минуту для компенсации разницы времени
+            $nowWithBuffer = (clone $now)->modify('-1 minute');
+            
+            // Проверка что бронь на будущее (с буфером)
+            if ($startTime < $nowWithBuffer) {
+                return $this->json(["error" => "Cannot book in the past. Please select a future time."], Response::HTTP_BAD_REQUEST);
             }
             
             // Проверка что endTime после startTime
