@@ -18,16 +18,14 @@ class BookingRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder("b")
             ->where("b.resource = :resource")
-            ->andWhere("b.status != :cancelled")
+            ->andWhere("b.status IN (:activeStatuses)")
             ->andWhere("(
-                (b.startTime <= :startTime AND b.endTime > :startTime) OR
-                (b.startTime < :endTime AND b.endTime >= :endTime) OR
-                (b.startTime >= :startTime AND b.endTime <= :endTime)
+                (b.startTime < :endTime AND b.endTime > :startTime)
             )")
             ->setParameter("resource", $resource)
             ->setParameter("startTime", $startTime)
             ->setParameter("endTime", $endTime)
-            ->setParameter("cancelled", "cancelled")
+            ->setParameter("activeStatuses", ["confirmed", "pending"])
             ->setMaxResults(1);
 
         if ($excludeBookingId) {
