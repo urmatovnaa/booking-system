@@ -40,8 +40,8 @@
 <main>
   <!-- Навигация для авторизованных пользователей -->
   <nav id="mainNav" class="nav hidden">
-    <a href="/bookings" id="navBookings">Мои бронирования</a>
-    <a href="/resources" id="navResources">Мои ресурсы</a>
+    <a href="/bookings" id="navBookings" data-turbo="false">Мои бронирования</a>
+    <a href="/resources" id="navResources" data-turbo="false">Мои ресурсы</a>
   </nav>
 
   <section id="authChooser">
@@ -61,7 +61,7 @@
     </form>
     <div class="row">
       <span class="muted">Уже есть аккаунт?</span>
-      <a href="/login" style="color: #9fb0ff;">Войти</a>
+      <a href="/login" style="color: #9fb0ff;" data-turbo="false">Войти</a>
     </div>
     <div id="registerMsg" class="muted"></div>
   </section>
@@ -75,7 +75,7 @@
     </form>
     <div class="row">
       <span class="muted">Нет аккаунта?</span>
-      <a href="/register" style="color: #9fb0ff;">Зарегистрироваться</a>
+      <a href="/register" style="color: #9fb0ff;" data-turbo="false">Зарегистрироваться</a>
     </div>
     <div id="loginMsg" class="muted"></div>
   </section>
@@ -83,7 +83,7 @@
   <section id="resourcesSection" class="hidden">
     <div class="row" style="justify-content: space-between; align-items: center;">
       <h2>Мои ресурсы</h2>
-      <a href="/resources/create" style="text-decoration: none;">
+      <a href="/resources/create" style="text-decoration: none;" data-turbo="false">
         <button>Добавить ресурс</button>
       </a>
     </div>
@@ -106,7 +106,7 @@
   <section id="bookingsSection" class="hidden">
     <div class="row" style="justify-content: space-between; align-items: center;">
       <h2>Мои бронирования</h2>
-      <a href="/bookings/create" style="text-decoration: none;">
+      <a href="/bookings/create" style="text-decoration: none;" data-turbo="false">
         <button>Добавить бронь</button>
       </a>
     </div>
@@ -132,8 +132,26 @@
 </footer>
 
 <script>
-(function() {
+// Отключаем Turbo полностью
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof Turbo !== 'undefined') {
+        Turbo.session.drive = false;
+        console.log('Turbo Drive disabled');
+    }
+});
+
+// Основная инициализация
+document.addEventListener('DOMContentLoaded', init);
+
+function init() {
     'use strict';
+    
+    // Prevent multiple executions
+    if (window.bookingSystemInitialized) {
+        console.log('Booking System already initialized, skipping...');
+        return;
+    }
+    window.bookingSystemInitialized = true;
     
     console.log('Booking System initialized');
     
@@ -549,7 +567,7 @@
     }
     
     // Initialize application
-    function init() {
+    function initializeApp() {
         console.log('Initializing application...');
         
         renderAuthState();
@@ -561,8 +579,7 @@
     }
     
     // Start the application
-    init();
-    
-})();
+    initializeApp();
+}
 </script>
 {% endblock %}
