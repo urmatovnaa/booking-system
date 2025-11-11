@@ -28,7 +28,6 @@ class Booking
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     #[Assert\NotNull]
-    #[Assert\GreaterThan('now', message: 'Start time must be in the future')]
     private ?\DateTimeInterface $startTime = null;
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
@@ -38,9 +37,6 @@ class Booking
     #[ORM\Column(length: 20)]
     #[Assert\Choice(['confirmed', 'pending', 'cancelled'])]
     private ?string $status = 'confirmed';
-
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $comment = null;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
@@ -105,9 +101,6 @@ class Booking
 
     public function setEndTime(\DateTimeInterface $endTime): static
     {
-        if ($this->startTime && $endTime <= $this->startTime) {
-            throw new \InvalidArgumentException('End time must be after start time');
-        }
         $this->endTime = $endTime;
         return $this;
     }
@@ -126,17 +119,6 @@ class Booking
         return $this;
     }
 
-    public function getComment(): ?string
-    {
-        return $this->comment;
-    }
-
-    public function setComment(?string $comment): static
-    {
-        $this->comment = $comment;
-        return $this;
-    }
-
     public function getCreatedAt(): ?\DateTimeImmutable
     {
         return $this->createdAt;
@@ -151,33 +133,5 @@ class Booking
     {
         $this->updatedAt = $updatedAt;
         return $this;
-    }
-
-    /**
-     * Проверяет, активна ли бронь (не отменена)
-     */
-    public function isActive(): bool
-    {
-        return $this->status !== 'cancelled';
-    }
-
-    /**
-     * Проверяет, идет ли бронь в данный момент
-     */
-    public function isOngoing(): bool
-    {
-        $now = new \DateTime();
-        return $this->isActive() && 
-               $this->startTime <= $now && 
-               $this->endTime > $now;
-    }
-
-    /**
-     * Проверяет, является ли бронь будущей
-     */
-    public function isFuture(): bool
-    {
-        $now = new \DateTime();
-        return $this->isActive() && $this->startTime > $now;
     }
 }
