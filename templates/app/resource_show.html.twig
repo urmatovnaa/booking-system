@@ -1,33 +1,58 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Resource {{ id }}{% endblock %}
+{% block title %}Ресурс #{{ id }}{% endblock %}
 
 {% block body %}
 <style>
   body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #0b1020; color: #e6ebff; }
   main { padding: 24px; }
   section { background: #0f1833; border: 1px solid #1a2547; border-radius: 10px; padding: 16px; max-width: 720px; }
-  input, textarea, button { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  input, button, select, textarea { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
-  button.danger { background: #8a1538; border-color: #b01c47; }
-  .row { display:flex; gap:8px; align-items:center; }
+  button.secondary { background: #0c1430; }
+  button.danger { background: #b82a2a; border-color: #d63737; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .muted { color:#93a6ff; font-size:12px; }
+  .error { color: #ff97a0; }
+  .ok { color: #8de78d; }
+  .full-width { width: 100%; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; color: #cfe0ff; font-size: 14px; }
 </style>
 
 <main>
-  <a href="/resources" class="muted">← Назад к списку</a>
+  <a href="/resources" class="muted" data-turbo="false">← Назад к списку ресурсов</a>
   <h2>Ресурс #{{ id }}</h2>
   <section>
     <div id="msg" class="muted"></div>
-    <div class="row" style="margin-bottom:8px;">
-      <input id="name" placeholder="Name" />
-      <input id="status" placeholder="Status" />
+    
+    <div class="form-group">
+      <label for="name">Название</label>
+      <input id="name" type="text" required class="full-width" />
     </div>
-    <div class="row" style="margin-bottom:8px;">
-      <textarea id="description" placeholder="Description" style="width:100%;"></textarea>
+    
+    <div class="form-group">
+      <label for="description">Описание</label>
+      <textarea id="description" class="full-width" rows="3"></textarea>
     </div>
+    
+    <div class="form-group">
+      <label for="type">Тип</label>
+      <input id="type" type="text" class="full-width" />
+    </div>
+    
+    <div class="form-group">
+      <label for="status">Статус</label>
+      <select id="status" class="full-width">
+        <option value="active">active</option>
+        <option value="inactive">inactive</option>
+      </select>
+    </div>
+    
     <div class="row">
-      <button id="saveBtn">Сохранить</button>
+      <button id="updateBtn">Обновить</button>
+      <button type="button" class="secondary" onclick="window.location.href='/resources'">Отмена</button>
       <button id="deleteBtn" class="danger">Удалить</button>
     </div>
   </section>
@@ -37,16 +62,9 @@
   (function() {
     'use strict';
     
-    // Prevent multiple executions
-    const initKey = 'resourceShow_' + {{ id }};
-    if (window[initKey]) {
-      return;
-    }
-    window[initKey] = true;
-    
     const resourceId = {{ id }};
     const token = localStorage.getItem('jwt_token');
-    if (!token) {
+    if (!token) { 
       window.location.href = '/login';
       return;
     }
@@ -56,7 +74,7 @@
       'Authorization': `Bearer ${token}` 
     };
     
-    const resourceShowApi = async (path, opts = {}) => {
+    const api = async (path, opts = {}) => {
       try {
         const res = await fetch(path, { 
           method: opts.method || 'GET',
@@ -90,100 +108,113 @@
       }
     };
 
-    async function loadResource() {
-      try {
-        const r = await resourceShowApi(`/api/resources/${resourceId}`);
-        const nameEl = document.getElementById('name');
-        const statusEl = document.getElementById('status');
-        const descEl = document.getElementById('description');
-        if (nameEl) nameEl.value = r.name || '';
-        if (statusEl) statusEl.value = r.status || '';
-        if (descEl) descEl.value = r.description || '';
-      } catch (e) {
-        const msg = document.getElementById('msg');
-        if (msg) {
-          msg.textContent = e?.data?.error || e?.error || 'Failed to load';
-          msg.className = 'error';
-        }
+    function showMessage(text, type = 'muted') {
+      const msg = document.getElementById('msg');
+      if (msg) {
+        msg.textContent = text;
+        msg.className = type;
       }
     }
-    loadResource();
 
-    const saveBtn = document.getElementById('saveBtn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const msg = document.getElementById('msg');
-        const nameEl = document.getElementById('name');
-        const statusEl = document.getElementById('status');
-        const descEl = document.getElementById('description');
-        
-        if (!nameEl || !statusEl || !descEl) return;
-        
-        const body = {
-          name: nameEl.value,
-          status: statusEl.value,
-          description: descEl.value,
-        };
-        
-        if (msg) {
-          msg.textContent = 'Сохранение...';
-          msg.className = 'muted';
-        }
-        saveBtn.disabled = true;
-        
-        try {
-          await resourceShowApi(`/api/resources/${resourceId}`, { 
-            method: 'PUT', 
-            body: JSON.stringify(body) 
-          });
-          window.location.href = '/resources';
-        } catch(e) {
-          if (msg) {
-            msg.textContent = e?.data?.error || 
-                             (e?.data?.errors && Array.isArray(e.data.errors) ? e.data.errors.join(', ') : '') ||
-                             e?.error || 
-                             'Failed to save';
-            msg.className = 'error';
-          }
-          saveBtn.disabled = false;
-        }
-      });
+    // Load resource data
+    async function loadResource() {
+      try {
+        const resource = await api(`/api/resources/${resourceId}`);
+        document.getElementById('name').value = resource.name || '';
+        document.getElementById('description').value = resource.description || '';
+        document.getElementById('type').value = resource.type || '';
+        document.getElementById('status').value = resource.status || 'active';
+      } catch(e) {
+        showMessage('Не удалось загрузить данные ресурса', 'error');
+      }
     }
 
-    const deleteBtn = document.getElementById('deleteBtn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        
-        if (!confirm('Вы уверены, что хотите удалить этот ресурс?')) {
-          return;
-        }
-        
-        const msg = document.getElementById('msg');
-        if (msg) {
-          msg.textContent = 'Удаление...';
-          msg.className = 'muted';
-        }
-        deleteBtn.disabled = true;
-        
-        try {
-          await resourceShowApi(`/api/resources/${resourceId}`, { method: 'DELETE' });
-          window.location.href = '/resources';
-        } catch(e) {
-          if (msg) {
-            msg.textContent = e?.data?.error || e?.error || 'Failed to delete';
-            msg.className = 'error';
+    // Initialize the page
+    function init() {
+      loadResource();
+      
+      const updateBtn = document.getElementById('updateBtn');
+      const deleteBtn = document.getElementById('deleteBtn');
+
+      // Update resource
+      if (updateBtn) {
+        updateBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          
+          const name = document.getElementById('name')?.value;
+          const description = document.getElementById('description')?.value;
+          const type = document.getElementById('type')?.value;
+          const status = document.getElementById('status')?.value;
+          
+          if (!name) {
+            showMessage('Название обязательно', 'error');
+            return;
           }
-          deleteBtn.disabled = false;
-        }
-      });
+          
+          const body = {
+            name: name,
+            description: description,
+            type: type,
+            status: status || 'active',
+          };
+          
+          showMessage('Обновление...', 'muted');
+          updateBtn.disabled = true;
+          
+          try {
+            const response = await api(`/api/resources/${resourceId}`, { 
+              method: 'PUT', 
+              body: JSON.stringify(body) 
+            });
+            
+            showMessage('Ресурс успешно обновлен!', 'ok');
+            setTimeout(() => {
+              window.location.href = '/resources';
+            }, 1000);
+            
+          } catch(error) {
+            console.error('Error updating resource:', error);
+            const errorMsg = error?.data?.error || 'Ошибка при обновлении ресурса';
+            showMessage(errorMsg, 'error');
+            updateBtn.disabled = false;
+          }
+        });
+      }
+
+      // Delete resource
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          
+          if (!confirm('Вы уверены, что хотите удалить этот ресурс?')) {
+            return;
+          }
+          
+          showMessage('Удаление...', 'muted');
+          deleteBtn.disabled = true;
+          
+          try {
+            await api(`/api/resources/${resourceId}`, { 
+              method: 'DELETE' 
+            });
+            
+            showMessage('Ресурс успешно удален! Перенаправление...', 'ok');
+            setTimeout(() => {
+              window.location.href = '/resources';
+            }, 1000);
+            
+          } catch(error) {
+            console.error('Error deleting resource:', error);
+            const errorMsg = error?.data?.error || 'Ошибка при удалении ресурса';
+            showMessage(errorMsg, 'error');
+            deleteBtn.disabled = false;
+          }
+        });
+      }
     }
+
+    // Start initialization
+    init();
   })();
 </script>
 {% endblock %}
-
-
