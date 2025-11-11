@@ -1,52 +1,74 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Booking {{ id }}{% endblock %}
+{% block title %}Бронь #{{ id }}{% endblock %}
 
 {% block body %}
 <style>
   body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 0; background: #0b1020; color: #e6ebff; }
   main { padding: 24px; }
   section { background: #0f1833; border: 1px solid #1a2547; border-radius: 10px; padding: 16px; max-width: 720px; }
-  input, button { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
+  input, button, select { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
-  button.danger { background: #8a1538; border-color: #b01c47; }
-  .row { display:flex; gap:8px; align-items:center; }
+  button.secondary { background: #0c1430; }
+  button.danger { background: #b82a2a; border-color: #d63737; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .muted { color:#93a6ff; font-size:12px; }
+  .error { color: #ff97a0; }
+  .ok { color: #8de78d; }
+  .full-width { width: 100%; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; color: #cfe0ff; font-size: 14px; }
 </style>
 
 <main>
-  <a href="/bookings" class="muted">← Назад к списку</a>
+  <a href="/bookings" class="muted" data-turbo="false">← Назад к списку бронирований</a>
   <h2>Бронь #{{ id }}</h2>
   <section>
     <div id="msg" class="muted"></div>
-    <div id="info" class="muted" style="margin-bottom:8px;"></div>
-    <div class="row" style="margin-bottom:8px;">
-      <input id="startTime" type="datetime-local" />
-      <input id="endTime" type="datetime-local" />
-      <input id="status" placeholder="Status" />
+    
+    <div class="form-group">
+      <label for="resourceId">Ресурс</label>
+      <select id="resourceId" class="full-width" required disabled>
+        <option value="">Загрузка...</option>
+      </select>
+      <div class="muted">Ресурс нельзя изменить после создания брони</div>
     </div>
+    
+    <div class="form-group">
+      <label for="startTime">Начало бронирования</label>
+      <input id="startTime" type="datetime-local" required class="full-width" />
+    </div>
+    
+    <div class="form-group">
+      <label for="endTime">Окончание бронирования</label>
+      <input id="endTime" type="datetime-local" required class="full-width" />
+    </div>
+    
+    <div class="form-group">
+      <label for="status">Статус</label>
+      <select id="status" class="full-width">
+        <option value="confirmed">confirmed</option>
+        <option value="pending">pending</option>
+        <option value="cancelled">cancelled</option>
+      </select>
+    </div>
+    
     <div class="row">
-      <button id="saveBtn">Сохранить</button>
+      <button id="updateBtn">Обновить</button>
+      <button type="button" class="secondary" onclick="window.location.href='/bookings'">Отмена</button>
       <button id="deleteBtn" class="danger">Удалить</button>
     </div>
   </section>
-  
 </main>
 
 <script>
   (function() {
     'use strict';
     
-    // Prevent multiple executions
-    const initKey = 'bookingShow_' + {{ id }};
-    if (window[initKey]) {
-      return;
-    }
-    window[initKey] = true;
-    
     const bookingId = {{ id }};
     const token = localStorage.getItem('jwt_token');
-    if (!token) {
+    if (!token) { 
       window.location.href = '/login';
       return;
     }
@@ -56,7 +78,7 @@
       'Authorization': `Bearer ${token}` 
     };
     
-    const bookingShowApi = async (path, opts = {}) => {
+    const api = async (path, opts = {}) => {
       try {
         const res = await fetch(path, { 
           method: opts.method || 'GET',
@@ -90,107 +112,153 @@
       }
     };
 
-    function toLocalInput(dtStr) {
-      const d = dtStr?.replace(' ', 'T');
-      return d?.slice(0,16) || '';
-    }
-
-    async function loadBooking() {
-      try {
-        const b = await bookingShowApi(`/api/bookings/${bookingId}`);
-        const infoEl = document.getElementById('info');
-        const statusEl = document.getElementById('status');
-        const startEl = document.getElementById('startTime');
-        const endEl = document.getElementById('endTime');
-        
-        if (infoEl) infoEl.textContent = `Ресурс: ${b.resource?.id} ${b.resource?.name || ''}`;
-        if (statusEl) statusEl.value = b.status || '';
-        if (startEl) startEl.value = toLocalInput(b.startTime);
-        if (endEl) endEl.value = toLocalInput(b.endTime);
-      } catch (e) {
-        const msg = document.getElementById('msg');
-        if (msg) {
-          msg.textContent = e?.data?.error || e?.error || 'Failed to load';
-          msg.className = 'error';
-        }
+    function showMessage(text, type = 'muted') {
+      const msg = document.getElementById('msg');
+      if (msg) {
+        msg.textContent = text;
+        msg.className = type;
       }
     }
-    loadBooking();
 
-    const saveBtn = document.getElementById('saveBtn');
-    if (saveBtn) {
-      saveBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    // Validate booking data
+    function validateBookingData(startTime, endTime) {
+      const errors = [];
+      
+      if (!startTime) {
+        errors.push('Укажите время начала');
+      }
+      
+      if (!endTime) {
+        errors.push('Укажите время окончания');
+      }
+      
+      if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
         
-        const msg = document.getElementById('msg');
-        const startEl = document.getElementById('startTime');
-        const endEl = document.getElementById('endTime');
-        const statusEl = document.getElementById('status');
-        
-        if (!startEl || !endEl || !statusEl) return;
-        
-        const body = {};
-        const st = startEl.value;
-        const et = endEl.value;
-        const status = statusEl.value;
-        if (st) body.startTime = st;
-        if (et) body.endTime = et;
-        if (status) body.status = status;
-        
-        if (msg) {
-          msg.textContent = 'Сохранение...';
-          msg.className = 'muted';
+        if (end <= start) {
+          errors.push('Время окончания должно быть после времени начала');
         }
-        saveBtn.disabled = true;
         
-        try {
-          await bookingShowApi(`/api/bookings/${bookingId}`, { 
-            method: 'PUT', 
-            body: JSON.stringify(body) 
-          });
-          window.location.href = '/bookings';
-        } catch(e) {
-          if (msg) {
-            msg.textContent = e?.data?.error || e?.error || 'Failed to save';
-            msg.className = 'error';
-          }
-          saveBtn.disabled = false;
+        // Check if booking exceeds 30 days
+        const maxEnd = new Date(start);
+        maxEnd.setDate(maxEnd.getDate() + 30);
+        if (end > maxEnd) {
+          errors.push('Бронь не может превышать 30 дней');
         }
-      });
+      }
+      
+      return errors;
     }
 
-    const deleteBtn = document.getElementById('deleteBtn');
-    if (deleteBtn) {
-      deleteBtn.addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+    // Load booking data
+    async function loadBooking() {
+      try {
+        const booking = await api(`/api/bookings/${bookingId}`);
         
-        if (!confirm('Вы уверены, что хотите удалить эту бронь?')) {
-          return;
-        }
+        // Format dates for datetime-local input
+        const startTime = new Date(booking.startTime);
+        const endTime = new Date(booking.endTime);
         
-        const msg = document.getElementById('msg');
-        if (msg) {
-          msg.textContent = 'Удаление...';
-          msg.className = 'muted';
-        }
-        deleteBtn.disabled = true;
+        document.getElementById('startTime').value = startTime.toISOString().slice(0, 16);
+        document.getElementById('endTime').value = endTime.toISOString().slice(0, 16);
+        document.getElementById('status').value = booking.status || 'confirmed';
         
-        try {
-          await bookingShowApi(`/api/bookings/${bookingId}`, { method: 'DELETE' });
-          window.location.href = '/bookings';
-        } catch(e) {
-          if (msg) {
-            msg.textContent = e?.data?.error || e?.error || 'Failed to delete';
-            msg.className = 'error';
-          }
-          deleteBtn.disabled = false;
-        }
-      });
+        // Load resource info
+        const resourceSelect = document.getElementById('resourceId');
+        resourceSelect.innerHTML = `<option value="${booking.resource.id}">#${booking.resource.id} - ${booking.resource.name}</option>`;
+        
+      } catch(e) {
+        showMessage('Не удалось загрузить данные брони', 'error');
+      }
     }
+
+    // Initialize the page
+    function init() {
+      loadBooking();
+      
+      const updateBtn = document.getElementById('updateBtn');
+      const deleteBtn = document.getElementById('deleteBtn');
+
+      // Update booking
+      if (updateBtn) {
+        updateBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          
+          const startTime = document.getElementById('startTime')?.value;
+          const endTime = document.getElementById('endTime')?.value;
+          const status = document.getElementById('status')?.value;
+          
+          // Frontend validation
+          const errors = validateBookingData(startTime, endTime);
+          if (errors.length > 0) {
+            showMessage(errors.join(', '), 'error');
+            return;
+          }
+          
+          const body = {
+            startTime: startTime,
+            endTime: endTime,
+            status: status || 'confirmed',
+          };
+          
+          showMessage('Обновление...', 'muted');
+          updateBtn.disabled = true;
+          
+          try {
+            const response = await api(`/api/bookings/${bookingId}`, { 
+              method: 'PUT', 
+              body: JSON.stringify(body) 
+            });
+            
+            showMessage('Бронь успешно обновлена!', 'ok');
+            setTimeout(() => {
+              window.location.href = '/bookings';
+            }, 1000);
+            
+          } catch(error) {
+            console.error('Error updating booking:', error);
+            const errorMsg = error?.data?.error || 'Ошибка при обновлении брони';
+            showMessage(errorMsg, 'error');
+            updateBtn.disabled = false;
+          }
+        });
+      }
+
+      // Delete booking
+      if (deleteBtn) {
+        deleteBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          
+          if (!confirm('Вы уверены, что хотите удалить эту бронь?')) {
+            return;
+          }
+          
+          showMessage('Удаление...', 'muted');
+          deleteBtn.disabled = true;
+          
+          try {
+            await api(`/api/bookings/${bookingId}`, { 
+              method: 'DELETE' 
+            });
+            
+            showMessage('Бронь успешно удалена! Перенаправление...', 'ok');
+            setTimeout(() => {
+              window.location.href = '/bookings';
+            }, 1000);
+            
+          } catch(error) {
+            console.error('Error deleting booking:', error);
+            const errorMsg = error?.data?.error || 'Ошибка при удалении брони';
+            showMessage(errorMsg, 'error');
+            deleteBtn.disabled = false;
+          }
+        });
+      }
+    }
+
+    // Start initialization
+    init();
   })();
 </script>
 {% endblock %}
-
-
