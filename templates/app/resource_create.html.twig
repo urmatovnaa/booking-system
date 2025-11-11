@@ -10,30 +10,48 @@
   input, textarea, button, select { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
   button.secondary { background: #0c1430; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .muted { color:#93a6ff; font-size:12px; }
   .error { color: #ff97a0; }
   .ok { color: #8de78d; }
+  .full-width { width: 100%; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; color: #cfe0ff; font-size: 14px; }
 </style>
 
 <main>
-  <a href="/resources" class="muted">← Назад к списку</a>
+  <a href="/resources" class="muted" data-turbo="false">← Назад к списку ресурсов</a>
   <h2>Создать ресурс</h2>
   <section>
     <div id="msg" class="muted"></div>
-    <div class="row">
-      <input id="name" placeholder="Название" required />
-      <select id="status">
+    
+    <div class="form-group">
+      <label for="name">Название</label>
+      <input id="name" type="text" placeholder="Название ресурса" required class="full-width" />
+    </div>
+    
+    <div class="form-group">
+      <label for="description">Описание</label>
+      <textarea id="description" placeholder="Описание ресурса" class="full-width" rows="3"></textarea>
+    </div>
+    
+    <div class="form-group">
+      <label for="type">Тип (опционально)</label>
+      <input id="type" type="text" placeholder="Тип ресурса" class="full-width" />
+    </div>
+    
+    <div class="form-group">
+      <label for="status">Статус</label>
+      <select id="status" class="full-width">
         <option value="active">active</option>
         <option value="inactive">inactive</option>
       </select>
     </div>
-    <div class="row">
-      <textarea id="description" placeholder="Описание" style="width:100%; min-height:100px;"></textarea>
-    </div>
+    
     <div class="row">
       <button id="createBtn">Создать</button>
-      <a href="/resources" style="text-decoration: none;"><button class="secondary">Отмена</button></a>
+      <button type="button" class="secondary" onclick="window.location.href='/resources'">Отмена</button>
     </div>
   </section>
 </main>
@@ -93,79 +111,81 @@
       }
     };
 
-    const createBtn = document.getElementById('createBtn');
-    if (!createBtn) {
-      console.error('Create button not found!');
-      return;
+    function showMessage(text, type = 'muted') {
+      const msg = document.getElementById('msg');
+      if (msg) {
+        msg.textContent = text;
+        msg.className = type;
+      }
     }
 
-    createBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      
-      const msg = document.getElementById('msg');
-      if (!msg) {
-        console.error('Message element not found!');
+    // Initialize the page
+    function init() {
+      const createBtn = document.getElementById('createBtn');
+      if (!createBtn) {
+        console.error('Create button not found!');
         return;
       }
-      
-      msg.textContent = '';
-      msg.className = 'muted';
-      
-      const nameInput = document.getElementById('name');
-      const statusSelect = document.getElementById('status');
-      const descriptionInput = document.getElementById('description');
-      
-      if (!nameInput || !statusSelect) {
-        msg.textContent = 'Ошибка: не найдены поля формы';
-        msg.className = 'error';
-        return;
-      }
-      
-      const name = nameInput.value.trim();
-      if (!name) {
-        msg.textContent = 'Название обязательно';
-        msg.className = 'error';
-        return;
-      }
-      
-      const body = {
-        name: name,
-        status: statusSelect.value || 'active',
-        description: descriptionInput ? descriptionInput.value.trim() || null : null,
-      };
-      
-      msg.textContent = 'Создание...';
-      createBtn.disabled = true;
-      
-      try {
-        console.log('Sending request:', body);
-        const response = await resourceApi('/api/resources', { 
-          method: 'POST', 
-          body: JSON.stringify(body) 
-        });
+
+      createBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         
-        console.log('Response received:', response);
+        showMessage('', 'muted');
         
-        if (response.resourceId) {
-          window.location.href = `/resources/${response.resourceId}`;
-        } else {
-          msg.textContent = 'Ресурс создан, но ID не получен';
-          msg.className = 'error';
+        const name = document.getElementById('name')?.value.trim();
+        const description = document.getElementById('description')?.value.trim();
+        const type = document.getElementById('type')?.value.trim();
+        const status = document.getElementById('status')?.value;
+        
+        if (!name) {
+          showMessage('Название обязательно', 'error');
+          return;
+        }
+        
+        const body = {
+          name: name,
+          description: description || null,
+          type: type || null,
+          status: status || 'active',
+        };
+        
+        showMessage('Создание ресурса...', 'muted');
+        createBtn.disabled = true;
+        
+        try {
+          console.log('Sending request:', body);
+          const response = await resourceApi('/api/resources', { 
+            method: 'POST', 
+            body: JSON.stringify(body) 
+          });
+          
+          console.log('Response received:', response);
+          
+          if (response.id || response.resourceId) {
+            const resourceId = response.id || response.resourceId;
+            showMessage('Ресурс успешно создан! Перенаправление...', 'ok');
+            setTimeout(() => {
+              window.location.href = `/resources/${resourceId}`;
+            }, 1000);
+          } else {
+            showMessage('Ресурс создан, но ID не получен', 'error');
+            createBtn.disabled = false;
+          }
+        } catch (error) {
+          console.error('Error creating resource:', error);
+          const errorMsg = error?.data?.error || 
+                          (error?.data?.errors && Array.isArray(error.data.errors) ? error.data.errors.join(', ') : '') ||
+                          error?.error || 
+                          'Ошибка при создании ресурса';
+          showMessage(errorMsg, 'error');
           createBtn.disabled = false;
         }
-      } catch (error) {
-        console.error('Error creating resource:', error);
-        const errorMsg = error?.data?.error || 
-                        (error?.data?.errors && Array.isArray(error.data.errors) ? error.data.errors.join(', ') : '') ||
-                        error?.error || 
-                        'Ошибка при создании ресурса';
-        msg.textContent = errorMsg;
-        msg.className = 'error';
-        createBtn.disabled = false;
-      }
-    });
+      });
+    }
+
+    // Start initialization
+    init();
   })();
 </script>
 {% endblock %}
-
