@@ -10,11 +10,14 @@
   input, button, select { background: #0c1430; color: #e6ebff; border: 1px solid #203160; border-radius: 8px; padding: 10px 12px; font-size: 14px; }
   button { cursor: pointer; background: #2a47b8; border-color: #3758d6; }
   button.secondary { background: #0c1430; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
   .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
   .muted { color:#93a6ff; font-size:12px; }
   .error { color: #ff97a0; }
   .ok { color: #8de78d; }
   .full-width { width: 100%; }
+  .form-group { margin-bottom: 16px; }
+  label { display: block; margin-bottom: 4px; color: #cfe0ff; font-size: 14px; }
 </style>
 
 <main>
@@ -22,25 +25,38 @@
   <h2>Создать бронь</h2>
   <section>
     <div id="msg" class="muted"></div>
-    <div class="row">
+    
+    <div class="form-group">
+      <label for="resourceId">Ресурс</label>
       <select id="resourceId" class="full-width" required>
         <option value="">Выберите ресурс...</option>
       </select>
     </div>
-    <div class="row">
-      <input id="startTime" type="datetime-local" required style="flex:1;" />
-      <input id="endTime" type="datetime-local" required style="flex:1;" />
+    
+    <div class="form-group">
+      <label for="startTime">Начало бронирования</label>
+      <input id="startTime" type="datetime-local" required class="full-width" />
+      <div class="muted" id="startTimeHelp">Минимальная дата: <span id="minDateDisplay"></span></div>
     </div>
-    <div class="row">
-      <select id="status" style="flex:1;">
+    
+    <div class="form-group">
+      <label for="endTime">Окончание бронирования</label>
+      <input id="endTime" type="datetime-local" required class="full-width" />
+      <div class="muted" id="endTimeHelp">Максимальный период: 30 дней</div>
+    </div>
+    
+    <div class="form-group">
+      <label for="status">Статус</label>
+      <select id="status" class="full-width">
         <option value="confirmed">confirmed</option>
         <option value="pending">pending</option>
         <option value="cancelled">cancelled</option>
       </select>
     </div>
+    
     <div class="row">
       <button id="createBtn">Создать</button>
-      <a href="/bookings" style="text-decoration: none;"><button class="secondary">Отмена</button></a>
+      <a href="/bookings" style="text-decoration: none;"><button type="button" class="secondary">Отмена</button></a>
     </div>
   </section>
 </main>
@@ -100,10 +116,105 @@
       }
     };
 
+    // Setup date validation
+    function setupDateValidation() {
+      const startInput = document.getElementById('startTime');
+      const endInput = document.getElementById('endTime');
+      const minDateDisplay = document.getElementById('minDateDisplay');
+      
+      if (!startInput || !endInput) return;
+      
+      // Set minimum date to current time + 1 hour
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+      now.setMinutes(0, 0, 0); // Round to nearest hour
+      
+      const minDate = now.toISOString().slice(0, 16);
+      startInput.min = minDate;
+      endInput.min = minDate;
+      
+      // Display minimum date
+      if (minDateDisplay) {
+        minDateDisplay.textContent = new Date(minDate).toLocaleString('ru-RU');
+      }
+      
+      // Start time change handler
+      startInput.addEventListener('change', function() {
+        if (endInput.value && new Date(endInput.value) < new Date(this.value)) {
+          endInput.value = this.value;
+        }
+        endInput.min = this.value;
+        
+        // Set maximum end time (30 days from start)
+        const maxEndTime = new Date(this.value);
+        maxEndTime.setDate(maxEndTime.getDate() + 30);
+        endInput.max = maxEndTime.toISOString().slice(0, 16);
+      });
+      
+      // End time change handler
+      endInput.addEventListener('change', function() {
+        const startTime = new Date(startInput.value);
+        const endTime = new Date(this.value);
+        
+        if (endTime <= startTime) {
+          this.value = startInput.value;
+          showMessage('Время окончания должно быть после времени начала', 'error');
+        }
+      });
+    }
+
+    // Validate booking data
+    function validateBookingData(resourceId, startTime, endTime) {
+      const errors = [];
+      
+      if (!resourceId) {
+        errors.push('Выберите ресурс');
+      }
+      
+      if (!startTime) {
+        errors.push('Укажите время начала');
+      }
+      
+      if (!endTime) {
+        errors.push('Укажите время окончания');
+      }
+      
+      if (startTime && endTime) {
+        const start = new Date(startTime);
+        const end = new Date(endTime);
+        const now = new Date();
+        
+        if (start < now) {
+          errors.push('Нельзя бронировать на прошедшее время');
+        }
+        
+        if (end <= start) {
+          errors.push('Время окончания должно быть после времени начала');
+        }
+        
+        // Check if booking exceeds 30 days
+        const maxEnd = new Date(start);
+        maxEnd.setDate(maxEnd.getDate() + 30);
+        if (end > maxEnd) {
+          errors.push('Бронь не может превышать 30 дней');
+        }
+      }
+      
+      return errors;
+    }
+
+    function showMessage(text, type = 'muted') {
+      const msg = document.getElementById('msg');
+      if (msg) {
+        msg.textContent = text;
+        msg.className = type;
+      }
+    }
+
     // Load user's resources
     async function loadResources() {
       try {
-        const resources = await bookingApi('/api/resources');
+        const resources = await bookingApi('/api/resources?status=active');
         const select = document.getElementById('resourceId');
         if (!select) return;
         select.innerHTML = '<option value="">Выберите ресурс...</option>';
@@ -114,80 +225,82 @@
           select.appendChild(opt);
         }
       } catch(e) {
-        const msg = document.getElementById('msg');
-        if (msg) {
-          msg.textContent = 'Не удалось загрузить ресурсы';
-          msg.className = 'error';
-        }
+        showMessage('Не удалось загрузить ресурсы', 'error');
       }
     }
-    loadResources();
 
-    const createBtn = document.getElementById('createBtn');
-    if (!createBtn) {
-      console.error('Create button not found!');
-      return;
-    }
-
-    createBtn.addEventListener('click', async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    // Initialize the page
+    function init() {
+      setupDateValidation();
+      loadResources();
       
-      const msg = document.getElementById('msg');
-      if (!msg) return;
-      
-      msg.textContent = '';
-      msg.className = 'muted';
-      
-      const resourceId = document.getElementById('resourceId')?.value;
-      const startTime = document.getElementById('startTime')?.value;
-      const endTime = document.getElementById('endTime')?.value;
-      const status = document.getElementById('status')?.value;
-      
-      if (!resourceId || !startTime || !endTime) {
-        msg.textContent = 'Все поля обязательны';
-        msg.className = 'error';
+      const createBtn = document.getElementById('createBtn');
+      if (!createBtn) {
+        console.error('Create button not found!');
         return;
       }
-      
-      const body = {
-        resourceId: Number(resourceId),
-        startTime: startTime,
-        endTime: endTime,
-        status: status || 'confirmed',
-      };
-      
-      msg.textContent = 'Создание...';
-      createBtn.disabled = true;
-      
-      try {
-        console.log('Sending request:', body);
-        const response = await bookingApi('/api/bookings', { 
-          method: 'POST', 
-          body: JSON.stringify(body) 
-        });
+
+      createBtn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         
-        console.log('Response received:', response);
+        showMessage('', 'muted');
         
-        if (response.bookingId) {
-          window.location.href = `/bookings/${response.bookingId}`;
-        } else {
-          msg.textContent = 'Бронь создана, но ID не получен';
-          msg.className = 'error';
+        const resourceId = document.getElementById('resourceId')?.value;
+        const startTime = document.getElementById('startTime')?.value;
+        const endTime = document.getElementById('endTime')?.value;
+        const status = document.getElementById('status')?.value;
+        
+        // Frontend validation
+        const errors = validateBookingData(resourceId, startTime, endTime);
+        if (errors.length > 0) {
+          showMessage(errors.join(', '), 'error');
+          return;
+        }
+        
+        const body = {
+          resourceId: Number(resourceId),
+          startTime: startTime,
+          endTime: endTime,
+          status: status || 'confirmed',
+        };
+        
+        showMessage('Создание брони...', 'muted');
+        createBtn.disabled = true;
+        
+        try {
+          console.log('Sending request:', body);
+          const response = await bookingApi('/api/bookings', { 
+            method: 'POST', 
+            body: JSON.stringify(body) 
+          });
+          
+          console.log('Response received:', response);
+          
+          if (response.id || response.bookingId) {
+            const bookingId = response.id || response.bookingId;
+            showMessage('Бронь успешно создана! Перенаправление...', 'ok');
+            setTimeout(() => {
+              window.location.href = `/bookings/${bookingId}`;
+            }, 1000);
+          } else {
+            showMessage('Бронь создана, но ID не получен', 'error');
+            createBtn.disabled = false;
+          }
+        } catch(error) {
+          console.error('Error creating booking:', error);
+          const errorMsg = error?.data?.error || 
+                          (error?.data?.errors && Array.isArray(error.data.errors) ? error.data.errors.join(', ') : '') ||
+                          error?.error || 
+                          'Ошибка при создании брони';
+          showMessage(errorMsg, 'error');
           createBtn.disabled = false;
         }
-      } catch(error) {
-        console.error('Error creating booking:', error);
-        const errorMsg = error?.data?.error || 
-                        (error?.data?.errors && Array.isArray(error.data.errors) ? error.data.errors.join(', ') : '') ||
-                        error?.error || 
-                        'Ошибка при создании брони';
-        msg.textContent = errorMsg;
-        msg.className = 'error';
-        createBtn.disabled = false;
-      }
-    });
+      });
+    }
+
+    // Start initialization
+    init();
   })();
 </script>
 {% endblock %}
-
