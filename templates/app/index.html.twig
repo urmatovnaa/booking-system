@@ -22,7 +22,7 @@
     .error { color: #ff97a0; }
     .ok { color: #8de78d; }
     .grid-2 { display:grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .hidden { display:none; }
+    .hidden { display:none !important; }
     footer { padding: 16px 24px; border-top:1px solid #19213c; color:#8aa2ff; font-size:12px; }
     .nav { display: flex; gap: 12px; margin-bottom: 16px; }
     .nav a { color: #9fb0ff; text-decoration: none; padding: 8px 16px; border-radius: 6px; border: 1px solid #203160; }
@@ -47,8 +47,8 @@
   <section id="authChooser">
     <h2>Добро пожаловать</h2>
     <div class="row">
-      <button id="showLogin" class="secondary">Войти</button>
-      <button id="showRegister">Зарегистрироваться</button>
+      <button id="showLogin" class="secondary" onclick="window.location.href='/login'">Войти</button>
+      <button id="showRegister" onclick="window.location.href='/register'">Зарегистрироваться</button>
     </div>
   </section>
 
@@ -132,249 +132,437 @@
 </footer>
 
 <script>
-  const qs = (s, root = document) => root.querySelector(s);
-  const ce = (tag, props = {}) => Object.assign(document.createElement(tag), props);
-
-  // page hint from server
-  window.appPage = '{{ page|default('') }}';
-
-  const tokenKey = 'jwt_token';
-  const authStatus = qs('#authStatus');
-  const logoutBtn = qs('#logoutBtn');
-  const mainNav = qs('#mainNav');
-
-  function getToken() { return localStorage.getItem(tokenKey) || ''; }
-  function setToken(token) { localStorage.setItem(tokenKey, token); renderAuthState(); }
-  function clearToken() { localStorage.removeItem(tokenKey); renderAuthState(); }
-
-  function renderAuthState() {
-    const t = getToken();
-    const authed = Boolean(t);
-    authStatus.textContent = authed ? 'Authenticated' : 'Not authenticated';
-    logoutBtn.classList.toggle('hidden', !authed);
-    mainNav.classList.toggle('hidden', !authed);
-  }
-
-  async function api(path, { method = 'GET', body, auth = true } = {}) {
-    const headers = { 'Content-Type': 'application/json' };
-    if (auth) {
-      const t = getToken();
-      if (t) headers['Authorization'] = `Bearer ${t}`;
-    }
-    const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-    const text = await res.text();
-    let data;
-    try { data = text ? JSON.parse(text) : {}; } catch { data = { raw: text }; }
-    if (!res.ok) throw Object.assign(new Error('Request failed'), { status: res.status, data });
-    return data;
-  }
-
-  // Highlight active navigation
-  function highlightActiveNav() {
-    const currentPath = window.location.pathname;
-    const navBookings = qs('#navBookings');
-    const navResources = qs('#navResources');
+(function() {
+    'use strict';
     
-    if (navBookings) navBookings.classList.toggle('active', currentPath === '/bookings' || currentPath === '/');
-    if (navResources) navResources.classList.toggle('active', currentPath === '/resources');
-  }
-
-  // Auth view toggles
-  const registerSection = qs('#registerSection');
-  const loginSection = qs('#loginSection');
-  const authChooser = qs('#authChooser');
-  
-  qs('#showLogin')?.addEventListener('click', ()=>{ 
-    registerSection.classList.add('hidden'); 
-    loginSection.classList.remove('hidden'); 
-  });
-  
-  qs('#showRegister')?.addEventListener('click', ()=>{ 
-    loginSection.classList.add('hidden'); 
-    registerSection.classList.remove('hidden'); 
-  });
-
-  // Register
-  qs('#registerForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const email = fd.get('email');
-    const password = fd.get('password');
-    const msg = qs('#registerMsg');
-    msg.textContent = '';
-    try {
-      await api('/api/register', { method: 'POST', auth: false, body: { email, password } });
-      msg.textContent = 'Регистрация успешна! Перенаправление на страницу входа...';
-      msg.className = 'ok';
-      setTimeout(() => window.location.href = '/login', 1500);
-    } catch (err) {
-      msg.textContent = err?.data?.error || 'Registration failed';
-      msg.className = 'error';
-    }
-  });
-
-  // Login
-  qs('#loginForm')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.currentTarget);
-    const email = fd.get('email');
-    const password = fd.get('password');
-    const msg = qs('#loginMsg');
-    msg.textContent = '';
-    try {
-      const data = await api('/api/auth', { method: 'POST', auth: false, body: { email, password } });
-      setToken(data.token);
-      msg.textContent = 'Вход успешен! Перенаправление...';
-      msg.className = 'ok';
-      setTimeout(() => window.location.href = '/bookings', 1000);
-    } catch (err) {
-      msg.textContent = err?.data?.error || 'Login failed';
-      msg.className = 'error';
-    }
-  });
-
-  logoutBtn.addEventListener('click', () => { 
-    clearToken(); 
-    window.location.href = '/login'; 
-  });
-
-  // Resources - с фильтром по названию
-  const resourcesList = qs('#resourcesList');
-  const resourceNameFilter = qs('#resourceNameFilter');
-  
-  async function loadResources() {
-    if (!resourcesList) return;
+    console.log('Booking System initialized');
     
-    resourcesList.textContent = 'Loading...';
-    try {
-      const status = qs('#resourceStatus').value;
-      const name = resourceNameFilter ? resourceNameFilter.value : '';
-      
-      let url = '/api/resources?';
-      const params = new URLSearchParams();
-      if (status) params.append('status', status);
-      if (name) params.append('name', name);
-      
-      const items = await api(`/api/resources?${params.toString()}`);
-      renderResources(items);
-    } catch (err) {
-      resourcesList.textContent = err?.data?.error || 'Failed to load resources';
-    }
-  }
-
-  function renderResources(items) {
-    if (!resourcesList) return;
+    // Utility functions
+    const qs = (selector, root = document) => root.querySelector(selector);
+    const ce = (tag, props = {}) => Object.assign(document.createElement(tag), props);
     
-    resourcesList.textContent = '';
-    if (!Array.isArray(items) || items.length === 0) {
-      resourcesList.append(ce('div', { className: 'muted', textContent: 'No resources yet' }));
-      return;
-    }
-    for (const r of items) {
-      const card = ce('div', { className: 'card' });
-      const title = ce('div', { textContent: `#${r.id} • ${r.name} (${r.status})` });
-      const desc = ce('div', { className: 'muted', textContent: r.description || '' });
-      const link = ce('a', { href: `/resources/${r.id}`, textContent: 'Открыть', style: 'color: #9fb0ff;' });
-      const linkRow = ce('div', { className: 'row' });
-      linkRow.append(link);
-      card.append(title, desc, linkRow);
-      resourcesList.append(card);
-    }
-  }
-
-  qs('#loadResourcesBtn')?.addEventListener('click', loadResources);
-  resourceNameFilter?.addEventListener('input', debounce(loadResources, 300));
-
-  // Bookings
-  const bookingsList = qs('#bookingsList');
-  async function loadBookings() {
-    if (!bookingsList) return;
+    // Page configuration
+    const page = '{{ page|default("") }}';
+    const tokenKey = 'jwt_token';
     
-    bookingsList.textContent = 'Loading...';
-    try {
-      const status = qs('#bookingStatus').value;
-      const items = await api(`/api/bookings${status ? `?status=${encodeURIComponent(status)}` : ''}`);
-      renderBookings(items);
-    } catch (err) {
-      bookingsList.textContent = err?.data?.error || 'Failed to load bookings';
-    }
-  }
-  
-  function renderBookings(items) {
-    if (!bookingsList) return;
+    console.log('Current page:', page);
     
-    bookingsList.textContent = '';
-    if (!Array.isArray(items) || items.length === 0) {
-      bookingsList.append(ce('div', { className: 'muted', textContent: 'No bookings yet' }));
-      return;
-    }
-    for (const b of items) {
-      const card = ce('div', { className: 'card' });
-      card.append(
-        ce('div', { textContent: `#${b.id} • res:${b.resource?.id} ${b.resource?.name || ''} • ${b.status}` }),
-        ce('div', { className: 'muted', textContent: `${b.startTime} → ${b.endTime}` })
-      );
-      const link = ce('a', { href: `/bookings/${b.id}`, textContent: 'Открыть', style: 'color: #9fb0ff;' });
-      const linkRow = ce('div', { className: 'row' });
-      linkRow.append(link);
-      card.append(linkRow);
-      bookingsList.append(card);
-    }
-  }
-  
-  qs('#loadBookingsBtn')?.addEventListener('click', loadBookings);
-
-  // Debounce function for search
-  function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
+    // Auth state management
+    const getToken = () => localStorage.getItem(tokenKey) || '';
+    const setToken = (token) => {
+        localStorage.setItem(tokenKey, token);
+        renderAuthState();
     };
-  }
-
-  // Initial page rendering
-  function renderPage() {
-    const authed = Boolean(getToken());
-    const page = window.appPage || '';
+    const clearToken = () => {
+        localStorage.removeItem(tokenKey);
+        renderAuthState();
+    };
     
-    // Redirect logic
-    if (!authed && (page === 'resources' || page === 'bookings' || page === 'resource_create' || page === 'booking_create' || page === 'resource_show' || page === 'booking_show')) {
-      window.location.href = '/login';
-      return;
+    // API function
+    async function api(path, { method = 'GET', body, auth = true } = {}) {
+        const headers = { 'Content-Type': 'application/json' };
+        if (auth) {
+            const t = getToken();
+            if (t) headers['Authorization'] = `Bearer ${t}`;
+        }
+        
+        console.log(`API call: ${method} ${path}`);
+        
+        const res = await fetch(path, { 
+            method, 
+            headers, 
+            body: body ? JSON.stringify(body) : undefined 
+        });
+        
+        const text = await res.text();
+        let data;
+        try { 
+            data = text ? JSON.parse(text) : {}; 
+        } catch { 
+            data = { raw: text }; 
+        }
+        
+        if (!res.ok) {
+            throw Object.assign(new Error('Request failed'), { 
+                status: res.status, 
+                data 
+            });
+        }
+        
+        return data;
     }
-
-    if (authed && (page === 'login' || page === 'register')) {
-      window.location.href = '/bookings';
-      return;
+    
+    // Render auth state
+    function renderAuthState() {
+        const token = getToken();
+        const isAuthenticated = Boolean(token);
+        
+        const authStatus = qs('#authStatus');
+        const logoutBtn = qs('#logoutBtn');
+        const mainNav = qs('#mainNav');
+        
+        if (authStatus) {
+            authStatus.textContent = isAuthenticated ? 'Authenticated' : 'Not authenticated';
+        }
+        
+        if (logoutBtn) {
+            logoutBtn.classList.toggle('hidden', !isAuthenticated);
+        }
+        
+        if (mainNav) {
+            mainNav.classList.toggle('hidden', !isAuthenticated);
+        }
+        
+        console.log('Auth state rendered:', isAuthenticated);
     }
-
-    // Show appropriate sections
-    document.querySelectorAll('section[id$="Section"]').forEach(section => {
-      section.classList.add('hidden');
-    });
-
-    if (page === 'register') {
-      qs('#registerSection')?.classList.remove('hidden');
-    } else if (page === 'login') {
-      qs('#loginSection')?.classList.remove('hidden');
-    } else if (page === 'resources') {
-      qs('#resourcesSection')?.classList.remove('hidden');
-      loadResources();
-    } else if (page === 'bookings' || page === '') {
-      qs('#bookingsSection')?.classList.remove('hidden');
-      loadBookings();
+    
+    // Show/hide sections based on page and auth
+    function renderPage() {
+        const token = getToken();
+        const isAuthenticated = Boolean(token);
+        
+        console.log('Rendering page, authenticated:', isAuthenticated);
+        
+        // Hide all sections first
+        const sections = [
+            'authChooser',
+            'registerSection', 
+            'loginSection',
+            'resourcesSection',
+            'bookingsSection'
+        ];
+        
+        sections.forEach(sectionId => {
+            const section = qs(`#${sectionId}`);
+            if (section) {
+                section.classList.add('hidden');
+            }
+        });
+        
+        // Show appropriate section based on page and auth state
+        if (!isAuthenticated) {
+            if (page === 'register') {
+                showSection('registerSection');
+            } else if (page === 'login') {
+                showSection('loginSection');
+            } else {
+                showSection('authChooser');
+            }
+        } else {
+            if (page === 'resources') {
+                showSection('resourcesSection');
+                loadResources();
+            } else if (page === 'bookings' || page === '') {
+                showSection('bookingsSection');
+                loadBookings();
+            } else {
+                showSection('bookingsSection');
+                loadBookings();
+            }
+        }
+        
+        highlightActiveNav();
     }
-
-    highlightActiveNav();
-  }
-
-  // Initialize
-  renderAuthState();
-  renderPage();
+    
+    function showSection(sectionId) {
+        const section = qs(`#${sectionId}`);
+        if (section) {
+            section.classList.remove('hidden');
+            console.log('Showing section:', sectionId);
+        }
+    }
+    
+    function highlightActiveNav() {
+        const currentPath = window.location.pathname;
+        const navBookings = qs('#navBookings');
+        const navResources = qs('#navResources');
+        
+        if (navBookings) {
+            navBookings.classList.toggle('active', currentPath === '/bookings' || currentPath === '/');
+        }
+        if (navResources) {
+            navResources.classList.toggle('active', currentPath === '/resources');
+        }
+    }
+    
+    // Auth event handlers
+    function setupAuthHandlers() {
+        // Show login/register sections - теперь перенаправляем на отдельные страницы
+        const showLoginBtn = qs('#showLogin');
+        const showRegisterBtn = qs('#showRegister');
+        
+        if (showLoginBtn) {
+            showLoginBtn.addEventListener('click', () => {
+                window.location.href = '/login';
+            });
+        }
+        
+        if (showRegisterBtn) {
+            showRegisterBtn.addEventListener('click', () => {
+                window.location.href = '/register';
+            });
+        }
+        
+        // Register form
+        const registerForm = qs('#registerForm');
+        if (registerForm) {
+            registerForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(registerForm);
+                const email = formData.get('email');
+                const password = formData.get('password');
+                const msg = qs('#registerMsg');
+                
+                if (msg) {
+                    msg.textContent = '';
+                    msg.className = 'muted';
+                }
+                
+                try {
+                    await api('/api/register', { 
+                        method: 'POST', 
+                        auth: false, 
+                        body: { email, password } 
+                    });
+                    
+                    if (msg) {
+                        msg.textContent = 'Регистрация успешна! Перенаправление на вход...';
+                        msg.className = 'ok';
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 1500);
+                    
+                } catch (err) {
+                    if (msg) {
+                        msg.textContent = err?.data?.error || 'Registration failed';
+                        msg.className = 'error';
+                    }
+                }
+            });
+        }
+        
+        // Login form
+        const loginForm = qs('#loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const formData = new FormData(loginForm);
+                const email = formData.get('email');
+                const password = formData.get('password');
+                const msg = qs('#loginMsg');
+                
+                if (msg) {
+                    msg.textContent = '';
+                    msg.className = 'muted';
+                }
+                
+                try {
+                    const data = await api('/api/auth', { 
+                        method: 'POST', 
+                        auth: false, 
+                        body: { email, password } 
+                    });
+                    
+                    setToken(data.token);
+                    
+                    if (msg) {
+                        msg.textContent = 'Вход успешен! Перенаправление...';
+                        msg.className = 'ok';
+                    }
+                    
+                    setTimeout(() => {
+                        window.location.href = '/bookings';
+                    }, 1000);
+                    
+                } catch (err) {
+                    if (msg) {
+                        msg.textContent = err?.data?.error || 'Login failed';
+                        msg.className = 'error';
+                    }
+                }
+            });
+        }
+        
+        // Logout
+        const logoutBtn = qs('#logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => {
+                clearToken();
+                window.location.href = '/login';
+            });
+        }
+    }
+    
+    // Resources functionality
+    async function loadResources() {
+        const resourcesList = qs('#resourcesList');
+        if (!resourcesList) return;
+        
+        resourcesList.textContent = 'Loading...';
+        
+        try {
+            const status = qs('#resourceStatus').value;
+            const name = qs('#resourceNameFilter').value;
+            
+            const params = new URLSearchParams();
+            if (status) params.append('status', status);
+            if (name) params.append('name', name);
+            
+            const items = await api(`/api/resources?${params.toString()}`);
+            renderResources(items);
+        } catch (err) {
+            resourcesList.textContent = err?.data?.error || 'Failed to load resources';
+        }
+    }
+    
+    function renderResources(items) {
+        const resourcesList = qs('#resourcesList');
+        if (!resourcesList) return;
+        
+        resourcesList.textContent = '';
+        
+        if (!Array.isArray(items) || items.length === 0) {
+            resourcesList.appendChild(ce('div', { 
+                className: 'muted', 
+                textContent: 'No resources yet' 
+            }));
+            return;
+        }
+        
+        items.forEach(resource => {
+            const card = ce('div', { className: 'card' });
+            const title = ce('div', { 
+                textContent: `#${resource.id} • ${resource.name} (${resource.status})` 
+            });
+            const desc = ce('div', { 
+                className: 'muted', 
+                textContent: resource.description || '' 
+            });
+            const link = ce('a', { 
+                href: `/resources/${resource.id}`, 
+                textContent: 'Открыть',
+                style: 'color: #9fb0ff; text-decoration: none;'
+            });
+            const linkRow = ce('div', { className: 'row' });
+            linkRow.appendChild(link);
+            card.appendChild(title);
+            card.appendChild(desc);
+            card.appendChild(linkRow);
+            resourcesList.appendChild(card);
+        });
+    }
+    
+    // Bookings functionality
+    async function loadBookings() {
+        const bookingsList = qs('#bookingsList');
+        if (!bookingsList) return;
+        
+        bookingsList.textContent = 'Loading...';
+        
+        try {
+            const status = qs('#bookingStatus').value;
+            const items = await api(`/api/bookings${status ? `?status=${status}` : ''}`);
+            renderBookings(items);
+        } catch (err) {
+            bookingsList.textContent = err?.data?.error || 'Failed to load bookings';
+        }
+    }
+    
+    function renderBookings(items) {
+        const bookingsList = qs('#bookingsList');
+        if (!bookingsList) return;
+        
+        bookingsList.textContent = '';
+        
+        if (!Array.isArray(items) || items.length === 0) {
+            bookingsList.appendChild(ce('div', { 
+                className: 'muted', 
+                textContent: 'No bookings yet' 
+            }));
+            return;
+        }
+        
+        items.forEach(booking => {
+            const card = ce('div', { className: 'card' });
+            card.appendChild(ce('div', { 
+                textContent: `#${booking.id} • res:${booking.resource?.id} ${booking.resource?.name || ''} • ${booking.status}` 
+            }));
+            card.appendChild(ce('div', { 
+                className: 'muted', 
+                textContent: `${booking.startTime} → ${booking.endTime}` 
+            }));
+            const link = ce('a', { 
+                href: `/bookings/${booking.id}`, 
+                textContent: 'Открыть',
+                style: 'color: #9fb0ff; text-decoration: none;'
+            });
+            const linkRow = ce('div', { className: 'row' });
+            linkRow.appendChild(link);
+            card.appendChild(linkRow);
+            bookingsList.appendChild(card);
+        });
+    }
+    
+    // Setup event listeners
+    function setupEventListeners() {
+        // Resources
+        const loadResourcesBtn = qs('#loadResourcesBtn');
+        if (loadResourcesBtn) {
+            loadResourcesBtn.addEventListener('click', loadResources);
+        }
+        
+        const resourceNameFilter = qs('#resourceNameFilter');
+        if (resourceNameFilter) {
+            resourceNameFilter.addEventListener('input', debounce(loadResources, 300));
+        }
+        
+        const resourceStatus = qs('#resourceStatus');
+        if (resourceStatus) {
+            resourceStatus.addEventListener('change', loadResources);
+        }
+        
+        // Bookings
+        const loadBookingsBtn = qs('#loadBookingsBtn');
+        if (loadBookingsBtn) {
+            loadBookingsBtn.addEventListener('click', loadBookings);
+        }
+        
+        const bookingStatus = qs('#bookingStatus');
+        if (bookingStatus) {
+            bookingStatus.addEventListener('change', loadBookings);
+        }
+    }
+    
+    // Debounce utility
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    // Initialize application
+    function init() {
+        console.log('Initializing application...');
+        
+        renderAuthState();
+        setupAuthHandlers();
+        setupEventListeners();
+        renderPage();
+        
+        console.log('Application initialized successfully');
+    }
+    
+    // Start the application
+    init();
+    
+})();
 </script>
 {% endblock %}
