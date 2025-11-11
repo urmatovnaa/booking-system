@@ -73,9 +73,33 @@ class BookingController extends AbstractController
             return $this->json(["error" => "Resource not found"], Response::HTTP_NOT_FOUND);
         }
 
-        $startTime = new \DateTime($data["startTime"]);
-        $endTime = new \DateTime($data["endTime"]);
+        // Валидация дат
+        try {
+            $startTime = new \DateTime($data["startTime"]);
+            $endTime = new \DateTime($data["endTime"]);
+            $now = new \DateTime();
+            
+            // Проверка что бронь на будущее
+            if ($startTime < $now) {
+                return $this->json(["error" => "Cannot book in the past"], Response::HTTP_BAD_REQUEST);
+            }
+            
+            // Проверка что endTime после startTime
+            if ($endTime <= $startTime) {
+                return $this->json(["error" => "End time must be after start time"], Response::HTTP_BAD_REQUEST);
+            }
+            
+            // Максимальный период бронирования - 30 дней
+            $maxEndTime = (clone $startTime)->modify('+30 days');
+            if ($endTime > $maxEndTime) {
+                return $this->json(["error" => "Booking cannot exceed 30 days"], Response::HTTP_BAD_REQUEST);
+            }
+            
+        } catch (\Exception $e) {
+            return $this->json(["error" => "Invalid date format"], Response::HTTP_BAD_REQUEST);
+        }
 
+        // Проверка пересечений с существующими бронированиями
         $existingBooking = $entityManager->getRepository(Booking::class)
             ->findOverlappingBooking($resource, $startTime, $endTime);
         
@@ -111,7 +135,7 @@ class BookingController extends AbstractController
 
         return $this->json([
             "message" => "Booking created successfully",
-            "bookingId" => $booking->getId()
+            "id" => $booking->getId()
         ], Response::HTTP_CREATED);
     }
 
@@ -125,16 +149,46 @@ class BookingController extends AbstractController
         $this->checkBookingOwnership($booking);
         $data = json_decode($request->getContent(), true);
 
-        if (isset($data["startTime"])) {
-            $booking->setStartTime(new \DateTime($data["startTime"]));
+        // Валидация дат при обновлении
+        if (isset($data["startTime"]) || isset($data["endTime"])) {
+            try {
+                $startTime = isset($data["startTime"]) ? new \DateTime($data["startTime"]) : $booking->getStartTime();
+                $endTime = isset($data["endTime"]) ? new \DateTime($data["endTime"]) : $booking->getEndTime();
+                $now = new \DateTime();
+                
+                // Проверка что бронь на будущее
+                if ($startTime < $now) {
+                    return $this->json(["error" => "Cannot book in the past"], Response::HTTP_BAD_REQUEST);
+                }
+                
+                // Проверка что endTime после startTime
+                if ($endTime <= $startTime) {
+                    return $this->json(["error" => "End time must be after start time"], Response::HTTP_BAD_REQUEST);
+                }
+                
+                // Максимальный период бронирования - 30 дней
+                $maxEndTime = (clone $startTime)->modify('+30 days');
+                if ($endTime > $maxEndTime) {
+                    return $this->json(["error" => "Booking cannot exceed 30 days"], Response::HTTP_BAD_REQUEST);
+                }
+                
+            } catch (\Exception $e) {
+                return $this->json(["error" => "Invalid date format"], Response::HTTP_BAD_REQUEST);
+            }
+
+            if (isset($data["startTime"])) {
+                $booking->setStartTime($startTime);
+            }
+            if (isset($data["endTime"])) {
+                $booking->setEndTime($endTime);
+            }
         }
-        if (isset($data["endTime"])) {
-            $booking->setEndTime(new \DateTime($data["endTime"]));
-        }
+
         if (isset($data["status"])) {
             $booking->setStatus($data["status"]);
         }
 
+        // Проверка пересечений только если изменились даты
         if (isset($data["startTime"]) || isset($data["endTime"])) {
             $existingBooking = $entityManager->getRepository(Booking::class)
                 ->findOverlappingBooking($booking->getResource(), $booking->getStartTime(), $booking->getEndTime(), $booking->getId());
@@ -158,7 +212,7 @@ class BookingController extends AbstractController
 
         return $this->json([
             "message" => "Booking updated successfully",
-            "bookingId" => $booking->getId()
+            "id" => $booking->getId()
         ]);
     }
 
