@@ -20,6 +20,12 @@ class FrontendController extends AbstractController
         return $this->render('app/index.html.twig', ['page' => 'login']);
     }
 
+    #[Route('/register', name: 'app_register', methods: ['GET'])]
+    public function register(): Response
+    {
+        return $this->render('app/index.html.twig', ['page' => 'register']);
+    }
+
     #[Route('/resources', name: 'app_resources', methods: ['GET'])]
     public function resources(): Response
     {
