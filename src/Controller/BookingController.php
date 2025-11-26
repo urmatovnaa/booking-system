@@ -6,6 +6,7 @@ use App\Entity\Booking;
 use App\Entity\Resource;
 use App\Repository\BookingRepository;
 use App\Repository\ResourceRepository;
+use App\Service\CacheService;
 
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -28,29 +29,35 @@ class BookingController extends AbstractController
             return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
         }
 
-        $criteria = ["user" => $user];
-        if ($status) {
-            $criteria["status"] = $status;
-        }
+        $cacheKey = "bookings_user_{$user->getId()}" . ($status ? "_status_{$status}" : "");
 
-        $bookings = $bookingRepository->findBy($criteria, ["startTime" => "DESC"]);
+        $data = CacheService::getCached($cacheKey, function() use ($bookingRepository, $user, $status) {
+            $criteria = ["user" => $user];
+            if ($status) {
+                $criteria["status"] = $status;
+            }
 
-        $data = [];
-        foreach ($bookings as $booking) {
-            $data[] = [
-                "id" => $booking->getId(),
-                "resource" => [
-                    "id" => $booking->getResource()->getId(),
-                    "name" => $booking->getResource()->getName()
-                ],
-                "startTime" => $booking->getStartTime()->format("Y-m-d H:i:s"),
-                "endTime" => $booking->getEndTime()->format("Y-m-d H:i:s"),
-                "status" => $booking->getStatus(),
-                "userId" => $booking->getUser()?->getId(),
-                "createdAt" => $booking->getCreatedAt()->format("Y-m-d H:i:s"),
-                "updatedAt" => $booking->getUpdatedAt()->format("Y-m-d H:i:s"),
-            ];
-        }
+            $bookings = $bookingRepository->findBy($criteria, ["startTime" => "DESC"]);
+
+            $data = [];
+            foreach ($bookings as $booking) {
+                $data[] = [
+                    "id" => $booking->getId(),
+                    "resource" => [
+                        "id" => $booking->getResource()->getId(),
+                        "name" => $booking->getResource()->getName()
+                    ],
+                    "startTime" => $booking->getStartTime()->format("Y-m-d H:i:s"),
+                    "endTime" => $booking->getEndTime()->format("Y-m-d H:i:s"),
+                    "status" => $booking->getStatus(),
+                    "userId" => $booking->getUser()?->getId(),
+                    "createdAt" => $booking->getCreatedAt()->format("Y-m-d H:i:s"),
+                    "updatedAt" => $booking->getUpdatedAt()->format("Y-m-d H:i:s"),
+                ];
+            }
+
+            return $data;
+        }, 300);
 
         return $this->json($data);
     }
@@ -73,26 +80,21 @@ class BookingController extends AbstractController
             return $this->json(["error" => "Resource not found"], Response::HTTP_NOT_FOUND);
         }
 
-        // Валидация дат
         try {
             $startTime = new \DateTime($data["startTime"]);
             $endTime = new \DateTime($data["endTime"]);
             $now = new \DateTime();
             
-            // Добавляем буфер в 1 минуту для компенсации разницы времени
             $nowWithBuffer = (clone $now)->modify('-1 minute');
             
-            // Проверка что бронь на будущее (с буфером)
             if ($startTime < $nowWithBuffer) {
                 return $this->json(["error" => "Cannot book in the past. Please select a future time."], Response::HTTP_BAD_REQUEST);
             }
             
-            // Проверка что endTime после startTime
             if ($endTime <= $startTime) {
                 return $this->json(["error" => "End time must be after start time"], Response::HTTP_BAD_REQUEST);
             }
             
-            // Максимальный период бронирования - 30 дней
             $maxEndTime = (clone $startTime)->modify('+30 days');
             if ($endTime > $maxEndTime) {
                 return $this->json(["error" => "Booking cannot exceed 30 days"], Response::HTTP_BAD_REQUEST);
@@ -102,7 +104,6 @@ class BookingController extends AbstractController
             return $this->json(["error" => "Invalid date format"], Response::HTTP_BAD_REQUEST);
         }
 
-        // Проверка пересечений с существующими бронированиями
         $existingBooking = $entityManager->getRepository(Booking::class)
             ->findOverlappingBooking($resource, $startTime, $endTime);
         
@@ -110,7 +111,6 @@ class BookingController extends AbstractController
             return $this->json(["error" => "Time slot already booked"], Response::HTTP_CONFLICT);
         }
 
-        // Получаем текущего аутентифицированного пользователя
         $user = $this->getUser();
         if (!$user) {
             return $this->json(["error" => "User not authenticated"], Response::HTTP_UNAUTHORIZED);
@@ -118,7 +118,7 @@ class BookingController extends AbstractController
 
         $booking = new Booking();
         $booking->setResource($resource);
-        $booking->setUser($user); // Устанавливаем текущего пользователя
+        $booking->setUser($user);
         $booking->setStartTime($startTime);
         $booking->setEndTime($endTime);
         $booking->setStatus($data["status"] ?? "confirmed");
@@ -136,6 +136,8 @@ class BookingController extends AbstractController
         $entityManager->persist($booking);
         $entityManager->flush();
 
+        CacheService::delete("bookings_user_{$user->getId()}");
+
         return $this->json([
             "message" => "Booking created successfully",
             "id" => $booking->getId()
@@ -152,24 +154,20 @@ class BookingController extends AbstractController
         $this->checkBookingOwnership($booking);
         $data = json_decode($request->getContent(), true);
 
-        // Валидация дат при обновлении
         if (isset($data["startTime"]) || isset($data["endTime"])) {
             try {
                 $startTime = isset($data["startTime"]) ? new \DateTime($data["startTime"]) : $booking->getStartTime();
                 $endTime = isset($data["endTime"]) ? new \DateTime($data["endTime"]) : $booking->getEndTime();
                 $now = new \DateTime();
                 
-                // Проверка что бронь на будущее
                 if ($startTime < $now) {
                     return $this->json(["error" => "Cannot book in the past"], Response::HTTP_BAD_REQUEST);
                 }
                 
-                // Проверка что endTime после startTime
                 if ($endTime <= $startTime) {
                     return $this->json(["error" => "End time must be after start time"], Response::HTTP_BAD_REQUEST);
                 }
                 
-                // Максимальный период бронирования - 30 дней
                 $maxEndTime = (clone $startTime)->modify('+30 days');
                 if ($endTime > $maxEndTime) {
                     return $this->json(["error" => "Booking cannot exceed 30 days"], Response::HTTP_BAD_REQUEST);
@@ -191,7 +189,6 @@ class BookingController extends AbstractController
             $booking->setStatus($data["status"]);
         }
 
-        // Проверка пересечений только если изменились даты
         if (isset($data["startTime"]) || isset($data["endTime"])) {
             $existingBooking = $entityManager->getRepository(Booking::class)
                 ->findOverlappingBooking($booking->getResource(), $booking->getStartTime(), $booking->getEndTime(), $booking->getId());
@@ -213,6 +210,9 @@ class BookingController extends AbstractController
 
         $entityManager->flush();
 
+        $userId = $booking->getUser()->getId();
+        CacheService::delete("bookings_user_{$userId}");
+
         return $this->json([
             "message" => "Booking updated successfully",
             "id" => $booking->getId()
@@ -223,8 +223,12 @@ class BookingController extends AbstractController
     public function delete(Booking $booking, EntityManagerInterface $entityManager): JsonResponse
     {
         $this->checkBookingOwnership($booking);
+        
+        $userId = $booking->getUser()->getId();
         $entityManager->remove($booking);
         $entityManager->flush();
+
+        CacheService::delete("bookings_user_{$userId}");
 
         return $this->json(["message" => "Booking deleted successfully"]);
     }
