@@ -1,27 +1,23 @@
-parameters:
-
 services:
     _defaults:
-        autowire: true      
+        autowire: true
         autoconfigure: true
-    
+
     App\:
         resource: '../src/'
         exclude:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
-
-    Redis:
-        class: Redis
-        calls:
-            - connect:
-                - '%env(REDIS_URL)%'
-
-    Symfony\Component\HttpFoundation\Session\Storage\Handler\RedisSessionHandler:
+    App\Service\RedisSessionManager:
+        public: true
+        autowire: true
         arguments:
-            - '@Redis'
+            $redisHost: '%env(REDIS_HOST)%'
+            $redisPort: '%env(REDIS_PORT)%'
 
-    # Cache service
-    App\Service\CacheService:
-        autowire: false'
+    App\EventSubscriber\JWTRedisSubscriber:
+        arguments:
+            $redisSessionManager: '@App\Service\RedisSessionManager'
+        tags:
+            - { name: kernel.event_subscriber }

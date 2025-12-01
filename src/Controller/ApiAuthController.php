@@ -3,7 +3,9 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Service\RedisSessionManager;
 use Doctrine\ORM\EntityManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -13,6 +15,13 @@ use Symfony\Component\Routing\Annotation\Route;
 
 class ApiAuthController extends AbstractController
 {
+    private RedisSessionManager $redisSessionManager;
+
+    public function __construct(RedisSessionManager $redisSessionManager)
+    {
+        $this->redisSessionManager = $redisSessionManager;
+    }
+
     #[Route("/api/register", name: "api_register", methods: ["POST"])]
     public function register(
         Request $request,
@@ -20,7 +29,7 @@ class ApiAuthController extends AbstractController
         EntityManagerInterface $entityManager
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        
+
         if (!isset($data["email"]) || !isset($data["password"])) {
             return $this->json(["error" => "Email and password are required"], Response::HTTP_BAD_REQUEST);
         }
@@ -53,13 +62,12 @@ class ApiAuthController extends AbstractController
         JWTTokenManagerInterface $JWTManager
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
-        
+
         if (!isset($data["email"]) || !isset($data["password"])) {
             return $this->json(["error" => "Email and password are required"], Response::HTTP_BAD_REQUEST);
         }
 
         $user = $entityManager->getRepository(User::class)->findOneBy(["email" => $data["email"]]);
-        
         if (!$user) {
             return $this->json(["error" => "User not found"], Response::HTTP_UNAUTHORIZED);
         }
@@ -68,9 +76,17 @@ class ApiAuthController extends AbstractController
             return $this->json(["error" => "Invalid password"], Response::HTTP_UNAUTHORIZED);
         }
 
+        $token = $JWTManager->create($user);
+
+        $this->redisSessionManager->storeUserSession($token, [
+            'userId' => $user->getId(),
+            'email' => $user->getEmail(),
+            'createdAt' => time()
+        ]);
+
         return $this->json([
             "message" => "Login successful! 🎉",
-            "token" => $JWTManager->create($user),
+            "token" => $token,
             "user" => [
                 "id" => $user->getId(),
                 "email" => $user->getEmail()
