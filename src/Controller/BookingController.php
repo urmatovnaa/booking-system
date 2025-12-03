@@ -7,6 +7,7 @@ use App\Entity\Resource;
 use App\Repository\BookingRepository;
 use App\Repository\ResourceRepository;
 use App\Service\CacheService;
+use App\Message\BookingCreatedMessage;
 
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -16,6 +17,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Validator\Validator\ValidatorInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
+
 
 #[Route("/api/bookings")]
 class BookingController extends AbstractController
@@ -67,7 +70,8 @@ class BookingController extends AbstractController
         Request $request,
         EntityManagerInterface $entityManager,
         ResourceRepository $resourceRepository,
-        ValidatorInterface $validator
+        ValidatorInterface $validator,
+        MessageBusInterface $bus
     ): JsonResponse {
         $data = json_decode($request->getContent(), true);
 
@@ -135,6 +139,12 @@ class BookingController extends AbstractController
 
         $entityManager->persist($booking);
         $entityManager->flush();
+
+        $bus->dispatch(new BookingCreatedMessage(
+            $booking->getId(),
+            $user->getId(),
+            $resource->getId()
+        ));
 
         CacheService::delete("bookings_user_{$user->getId()}");
 
