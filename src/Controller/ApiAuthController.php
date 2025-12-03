@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Message\UserRegisteredMessage;
 use App\Service\RedisSessionManager;
 use Doctrine\ORM\EntityManagerInterface;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
@@ -12,14 +13,19 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Annotation\Route;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 class ApiAuthController extends AbstractController
 {
     private RedisSessionManager $redisSessionManager;
+    private MessageBusInterface $bus;
 
-    public function __construct(RedisSessionManager $redisSessionManager)
-    {
+    public function __construct(
+        RedisSessionManager $redisSessionManager,
+        MessageBusInterface $bus
+    ) {
         $this->redisSessionManager = $redisSessionManager;
+        $this->bus = $bus;
     }
 
     #[Route("/api/register", name: "api_register", methods: ["POST"])]
@@ -46,6 +52,12 @@ class ApiAuthController extends AbstractController
 
         $entityManager->persist($user);
         $entityManager->flush();
+
+        // ⬅️ Главная строка — отправляем сообщение в очередь
+        $this->bus->dispatch(new UserRegisteredMessage(
+            $user->getId(),
+            $user->getEmail()
+        ));
 
         return $this->json([
             "message" => "User registered successfully",
@@ -78,6 +90,7 @@ class ApiAuthController extends AbstractController
 
         $token = $JWTManager->create($user);
 
+        // сохраняем сессию
         $this->redisSessionManager->storeUserSession($token, [
             'userId' => $user->getId(),
             'email' => $user->getEmail(),
