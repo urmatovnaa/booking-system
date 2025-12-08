@@ -25,7 +25,7 @@ class Resource
     private ?string $status = 'active';
 
     #[ORM\ManyToOne(inversedBy: 'resources')]
-    #[ORM\JoinColumn(nullable: false)]
+    #[ORM\JoinColumn(nullable: true)]
     private ?User $user = null;
 
     #[ORM\OneToMany(mappedBy: 'resource', targetEntity: Booking::class)]
