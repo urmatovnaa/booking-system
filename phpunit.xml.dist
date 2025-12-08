@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/11.4/phpunit.xsd"
+         bootstrap="tests/bootstrap.php"
+         colors="true"
+         displayDetailsOnTestsThatTriggerDeprecations="true"
+         displayDetailsOnTestsThatTriggerWarnings="true"
+         cacheDirectory=".phpunit.cache">
+    
+    <php>
+        <env name="APP_ENV" value="test"/>
+        <env name="SHELL_VERBOSITY" value="-1"/>
+        <env name="KERNEL_CLASS" value="App\Kernel"/>
+        <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled"/>
+        <!-- Для Xdebug -->
+        <ini name="xdebug.mode" value="coverage"/>
+        <!-- Отключаем ошибки Redis для тестов -->
+        <ini name="error_reporting" value="E_ALL &amp; ~E_WARNING"/>
+    </php>
+    
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
+        </testsuite>
+        <testsuite name="Functional">
+            <directory>tests/Functional</directory>
+        </testsuite>
+    </testsuites>
+    
+    <source>
+        <include>
+            <directory>src</directory>
+        </include>
+        <exclude>
+            <directory>src/Migrations</directory>
+            <directory>vendor</directory>
+            <file>src/Kernel.php</file>
+            <!-- Можно исключить сущности если они сгенерированы -->
+            <!-- <directory>src/Entity</directory> -->
+        </exclude>
+    </source>
+    
+    <coverage 
+        pathCoverage="false"
+        ignoreDeprecatedCodeUnits="true"
+        disableCodeCoverageIgnore="false">
+        <report>
+            <html outputDirectory="coverage" lowUpperBound="50" highLowerBound="80"/>
+            <clover outputFile="coverage.xml"/>
+            <text outputFile="php://stdout" showUncoveredFiles="false"/>
+        </report>
+    </coverage>
+</phpunit>
