@@ -1,0 +1,9 @@
+framework:
+    messenger:
+        transports:
+            # Создаем транспорт с именем "async" который использует sync://
+            async: "sync://"
+        
+        # Если нужно, можно указать роутинг
+        # routing:
+        #     "App\Message\UserRegisteredMessage": async
