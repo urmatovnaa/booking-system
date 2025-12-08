@@ -9,11 +9,15 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     librabbitmq-dev \
-    libssh-dev
+    libssh-dev \
+    libzip-dev
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
 
-RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd
+RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
+
+# Устанавливаем Redis расширение
+RUN pecl install redis && docker-php-ext-enable redis
 
 RUN pecl install amqp && docker-php-ext-enable amqp
 
