@@ -1,40 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
-         bootstrap="vendor/autoload.php"
-         colors="true"
-         cacheDirectory=".phpunit.cache">
-    
+<phpunit bootstrap="tests/bootstrap.php" colors="true">
     <php>
-        <ini name="error_reporting" value="-1"/>
-        <ini name="memory_limit" value="512M"/>
         <server name="APP_ENV" value="test" force="true"/>
-        <server name="SHELL_VERBOSITY" value="-1"/>
-        <server name="SYMFONY_PHPUNIT_REMOVE" value=""/>
-        <server name="SYMFONY_PHPUNIT_VERSION" value="11.5"/>
-        <env name="KERNEL_CLASS" value="App\Kernel"/>
+        <server name="KERNEL_CLASS" value="App\Kernel"/>
     </php>
-    
     <testsuites>
-        <testsuite name="Project Test Suite">
-            <directory>tests</directory>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>tests/Integration</directory>
         </testsuite>
     </testsuites>
-    
-    <coverage>
-        <report>
-            <html outputDirectory="var/coverage"/>
-            <text outputFile="php://stdout"/>
-        </report>
-    </coverage>
-    
-    <extensions>
-        <extension class="Symfony\Bridge\PhpUnit\CoverageListener"/>
-    </extensions>
-    
-    <source>
-        <include>
-            <directory>src</directory>
-        </include>
-    </source>
 </phpunit>

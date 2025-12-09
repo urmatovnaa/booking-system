@@ -1,21 +1,19 @@
 <?php
-// tests/bootstrap.php
 
 use Symfony\Component\Dotenv\Dotenv;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+require dirname(__DIR__).'/vendor/autoload.php';
 
-// Загружаем .env файл если существует
-if (file_exists(dirname(__DIR__) . '/.env.test')) {
-    (new Dotenv())->load(dirname(__DIR__) . '/.env.test');
-} elseif (file_exists(dirname(__DIR__) . '/.env')) {
-    (new Dotenv())->load(dirname(__DIR__) . '/.env');
+// Загружаем переменные окружения для тестов
+if (file_exists(dirname(__DIR__).'/.env.test')) {
+    (new Dotenv())->loadEnv(dirname(__DIR__).'/.env.test');
 }
 
-// Убеждаемся, что APP_ENV установлен в test
+// Устанавливаем APP_ENV
 $_SERVER['APP_ENV'] = $_ENV['APP_ENV'] = 'test';
 
-// Для отладки
-if ($_SERVER['APP_DEBUG'] ?? $_ENV['APP_DEBUG'] ?? false) {
-    umask(0000);
+// Для SQLite in-memory устанавливаем DATABASE_URL
+if (!isset($_ENV['DATABASE_URL'])) {
+    $_ENV['DATABASE_URL'] = 'sqlite:///:memory:';
+    $_SERVER['DATABASE_URL'] = 'sqlite:///:memory:';
 }
