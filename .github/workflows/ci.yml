@@ -39,14 +39,17 @@ jobs:
     - name: Install dependencies
       run: composer install --no-interaction --prefer-dist --no-progress
     
-    - name: Create .env.test with in-memory SQLite
+    - name: Create .env.test with file-based SQLite
       run: |
         echo "APP_ENV=test" > .env.test
         echo "APP_SECRET=test_secret_$(date +%s)" >> .env.test
-        echo "DATABASE_URL=sqlite:///:memory:" >> .env.test
+        echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test  # ⬅️ ФАЙЛОВАЯ БАЗА
         echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.test
         echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.test
         echo "JWT_PASSPHRASE=test_passphrase" >> .env.test
+
+    - name: Create var directory
+      run: mkdir -p var
     
     - name: Create JWT keys for tests
       run: |
@@ -68,3 +71,17 @@ jobs:
         SYMFONY_DEPRECATIONS_HELPER: disabled
       run: |
         php bin/phpunit --no-coverage
+    - name: Setup database with verification
+      run: |
+        # Очищаем кэш
+        php bin/console cache:clear --env=test --no-warmup
+        
+        # Создаем схему
+        php bin/console doctrine:schema:create --env=test --dump-sql
+        
+        # Проверяем что схема создана
+        echo "Checking database schema..."
+        php bin/console doctrine:query:sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name" --env=test
+        
+        # Создаем тестовые данные если нужно
+        php bin/console doctrine:fixtures:load --env=test --no-interaction --append 2>/dev/null || echo "No fixtures found"
