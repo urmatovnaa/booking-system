@@ -1,3 +1,5 @@
 doctrine:
     dbal:
-        dbname_suffix: ''
+        url: '%env(resolve:DATABASE_URL)%'
+        # Для SQLite
+        driver: 'pdo_sqlite'
