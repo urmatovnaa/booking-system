@@ -22,9 +22,8 @@ class BookingControllerTest extends WebTestCase
     
     protected function setUp(): void
     {   
-        parent::setUp();
-        $this->setUpAuth();
         $this->client = static::createClient();
+        $this->authClient($client);
         $this->entityManager = self::getContainer()->get('doctrine')->getManager();
         
         // Создаем схему если не существует

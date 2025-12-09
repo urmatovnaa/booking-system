@@ -8,16 +8,11 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 class ApiAuthControllerTest extends WebTestCase
 {   
     use AuthTestTrait;
-    
-    public function setUp(): void
-    {
-        parent::setUp();
-        $this->setUpAuth();
-    }
 
     public function testRegisterEndpointExists(): void
     {
         $client = static::createClient();
+        $this->authClient($client);
         
         // Просто проверяем что endpoint существует и отвечает
         $client->request('POST', '/api/register', [], [], [
