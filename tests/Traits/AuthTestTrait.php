@@ -2,36 +2,38 @@
 
 namespace App\Tests\Traits;
 
+use Symfony\Bundle\FrameworkBundle\KernelBrowser;
+
 trait AuthTestTrait
 {
-    /**
-     * Просто авторизует клиента без создания свойств
-     */
-    protected function authClient(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): void
+    protected function authClient(KernelBrowser $client = null): KernelBrowser
     {
+        // Если клиент не передан — создаём
+        $client = $client ?? static::createClient();
+
         $container = static::getContainer();
         $em = $container->get('doctrine')->getManager();
-        
-        // Находим любого пользователя
+
+        // Ищем существующего пользователя
         $userRepository = $em->getRepository(\App\Entity\User::class);
         $user = $userRepository->findOneBy([]);
-        
+
         if (!$user) {
-            // Создаем пользователя на лету
             $user = new \App\Entity\User();
             $user->setEmail('test@example.com');
-            $user->setName('Test User');
-            
+
             $passwordHasher = $container->get('security.user_password_hasher');
             $user->setPassword(
                 $passwordHasher->hashPassword($user, 'password123')
             );
-            
+
             $em->persist($user);
             $em->flush();
         }
-        
-        // Авторизуем
+
+        // Авторизация
         $client->loginUser($user);
+
+        return $client;
     }
 }

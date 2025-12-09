@@ -1,0 +1,44 @@
+name: Run PHPUnit Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  phpunit:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping --silent"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, pdo_mysql, intl
+          coverage: none
+
+      - name: Install Composer dependencies
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Create test database
+        run: |
+          php bin/console doctrine:database:create --env=test --if-not-exists
+          php bin/console doctrine:schema:update --force --env=test
+
+      - name: Run PHPUnit tests
+        run: vendor/bin/phpunit --testdox
