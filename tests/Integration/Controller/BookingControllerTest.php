@@ -34,20 +34,30 @@ class BookingControllerTest extends WebTestCase
     {
         $schemaManager = $this->entityManager->getConnection()->createSchemaManager();
         
-        // Проверяем основные таблицы
-        $tables = ['booking', 'resource', 'user'];
-        $missingTables = [];
+        // Проверяем ВСЕ нужные таблицы
+        $requiredTables = ['booking', 'resource', 'user'];
+        $allTablesExist = true;
         
-        foreach ($tables as $table) {
+        foreach ($requiredTables as $table) {
             if (!$schemaManager->tablesExist([$table])) {
-                $missingTables[] = $table;
+                $allTablesExist = false;
+                break;
             }
         }
         
-        if (!empty($missingTables)) {
+        if (!$allTablesExist) {
             // Создаем недостающие таблицы
             $schemaTool = new \Doctrine\ORM\Tools\SchemaTool($this->entityManager);
             $metadata = $this->entityManager->getMetadataFactory()->getAllMetadata();
+            
+            try {
+                // Сначала удаляем существующие таблицы (осторожно!)
+                $schemaTool->dropSchema($metadata);
+            } catch (\Exception $e) {
+                // Игнорируем ошибки удаления
+            }
+            
+            // Создаем все таблицы заново
             $schemaTool->createSchema($metadata);
         }
     }
