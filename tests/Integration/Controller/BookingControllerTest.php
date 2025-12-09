@@ -1,6 +1,9 @@
 <?php
 namespace App\Tests\Integration\Controller;
 
+
+use App\Tests\Traits\AuthTestTrait;
+
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use App\Entity\User;
 use App\Entity\Resource;
@@ -8,7 +11,9 @@ use App\Entity\Booking;
 use Doctrine\ORM\EntityManagerInterface;
 
 class BookingControllerTest extends WebTestCase
-{
+{   
+    use AuthTestTrait;
+
     private $client;
     private $entityManager;
     private $testUser;
@@ -16,7 +21,9 @@ class BookingControllerTest extends WebTestCase
     private $token;
     
     protected function setUp(): void
-    {
+    {   
+        parent::setUp();
+        $this->setUpAuth();
         $this->client = static::createClient();
         $this->entityManager = self::getContainer()->get('doctrine')->getManager();
         

@@ -2,10 +2,19 @@
 
 namespace App\Tests\Integration\Controller;
 
+use App\Tests\Traits\AuthTestTrait;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class ApiAuthControllerTest extends WebTestCase
-{
+{   
+    use AuthTestTrait;
+    
+    public function setUp(): void
+    {
+        parent::setUp();
+        $this->setUpAuth();
+    }
+
     public function testRegisterEndpointExists(): void
     {
         $client = static::createClient();
@@ -13,6 +22,7 @@ class ApiAuthControllerTest extends WebTestCase
         // Просто проверяем что endpoint существует и отвечает
         $client->request('POST', '/api/register', [], [], [
             'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json',
         ], json_encode([
             'email' => 'test@example.com',
             'password' => 'Password123!',

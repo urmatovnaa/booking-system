@@ -4,17 +4,23 @@ namespace App\Tests\Integration\Controller;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 use App\Entity\User;
 use App\Entity\Resource;
+use App\Tests\Traits\AuthTestTrait;
+
 use Doctrine\ORM\EntityManagerInterface;
 
 class ResourceControllerTest extends WebTestCase
-{
+{   
+    use AuthTestTrait;
+    
     private $client;
     private $entityManager;
     private $testUser;
     private $token;
     
     protected function setUp(): void
-    {
+    {   
+        parent::setUp();
+        $this->setUpAuth();
         $this->client = static::createClient();
         $this->entityManager = self::getContainer()->get('doctrine')->getManager();
         
