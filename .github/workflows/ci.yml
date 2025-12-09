@@ -1,20 +1,14 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   tests:
     runs-on: ubuntu-24.04
-    
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: test_db
-        ports:
-          - 3306:3306
-        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
     
     steps:
     - uses: actions/checkout@v4
@@ -23,28 +17,47 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.3'
-        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, zip, sqlite3
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, zip, sqlite3  # Убрали pdo_mysql, добавили sqlite
         coverage: none
+        tools: composer
+    
+    - name: Check PHP version
+      run: php -v
+    
+    - name: Validate composer.json
+      run: composer validate --strict
+    
+    - name: Cache Composer packages
+      id: composer-cache
+      uses: actions/cache@v3
+      with:
+        path: vendor
+        key: ${{ runner.os }}-php-8.3-${{ hashFiles('**/composer.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-php-8.3-
     
     - name: Install dependencies
-      run: composer install --no-interaction --prefer-dist
+      run: composer install --no-interaction --prefer-dist --no-progress
     
-    - name: Create .env.test
+    - name: Create .env.test with SQLite
       run: |
         echo "APP_ENV=test" > .env.test
         echo "APP_SECRET=test_secret_$(date +%s)" >> .env.test
-        echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4" >> .env.test
+        echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test
+        echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.test
+        echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.test
+        echo "JWT_PASSPHRASE=test_passphrase" >> .env.test
     
-    - name: Setup database
+    - name: Create var directory
+      run: mkdir -p var
+    
+    - name: Setup database (SQLite)
       run: |
-        php bin/console doctrine:database:create --env=test
+        php bin/console doctrine:database:create --env=test --if-not-exists
         php bin/console doctrine:schema:create --env=test
     
-    - name: Run tests
+    - name: Run PHPUnit tests
       env:
         SYMFONY_DEPRECATIONS_HELPER: disabled
       run: |
-        # Запускаем тесты по группам
-        php bin/phpunit --testsuite=Unit
-        php bin/phpunit --testsuite=Integration
-        php bin/phpunit --testsuite=Functional --stop-on-failure
+        php bin/phpunit --no-coverage
