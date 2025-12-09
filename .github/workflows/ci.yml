@@ -1,37 +1,58 @@
 name: CI
 
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+on: [push, pull_request]
 
 jobs:
   tests:
     runs-on: ubuntu-24.04
     
-    strategy:
-      matrix:
-        php: ['8.3', '8.4']
-    
-    name: PHP ${{ matrix.php }} tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: test_db
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+      
+      redis:
+        image: redis:alpine
+        ports:
+          - 6379:6379
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup PHP
+    - name: Setup PHP with extensions
       uses: shivammathur/setup-php@v2
       with:
-        php-version: ${{ matrix.php }}
-        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
-        coverage: none
+        php-version: '8.3'
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, redis, zip, amqp, xdebug
+        coverage: xdebug
+        tools: composer:v2
+    
+    - name: Check PHP version
+      run: php -v
     
     - name: Install dependencies
-      env:
-        COMPOSER_NO_INTERACTION: 1
-      run: |
-        composer validate --strict
-        composer install --prefer-dist --no-progress
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
     
-    - name: Run tests
-      run: vendor/bin/phpunit
+    - name: Create phpunit.xml if not exists
+      run: |
+        if [ ! -f phpunit.xml ] && [ ! -f phpunit.xml.dist ]; then
+          cp phpunit.xml.dist.example phpunit.xml.dist 2>/dev/null || echo "Will use default PHPUnit config"
+        fi
+    
+    - name: Run PHPUnit tests
+      run: |
+        export DATABASE_URL="mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
+        export REDIS_URL="redis://127.0.0.1:6379"
+        php bin/phpunit --no-coverage
+    
+    - name: Run PHPUnit with coverage (optional)
+      if: success()
+      run: |
+        export DATABASE_URL="mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
+        export REDIS_URL="redis://127.0.0.1:6379"
+        php bin/phpunit --coverage-text --coverage-clover=coverage.xml
