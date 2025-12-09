@@ -1,5 +1,4 @@
 <?php
-// tests/Integration/Controller/BookingControllerAuthTest.php
 namespace App\Tests\Integration\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
