@@ -1,4 +1,6 @@
 {
+    "name": "vendor/project-name",
+    "description": "A description of your project",
     "type": "project",
     "license": "proprietary",
     "minimum-stability": "stable",
