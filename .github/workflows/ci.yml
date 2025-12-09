@@ -2,13 +2,19 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    
+    strategy:
+      matrix:
+        php: ['8.3', '8.4']
+    
+    name: PHP ${{ matrix.php }} tests
     
     steps:
     - uses: actions/checkout@v4
@@ -16,24 +22,16 @@ jobs:
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
-        php-version: '8.3'
-        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, redis, amqp, zip
+        php-version: ${{ matrix.php }}
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql
         coverage: none
     
-    - name: Validate composer.json and composer.lock
-      run: composer validate --strict
-    
-    - name: Cache Composer packages
-      id: composer-cache
-      uses: actions/cache@v3
-      with:
-        path: vendor
-        key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-
-    
     - name: Install dependencies
-      run: composer install --prefer-dist --no-progress
+      env:
+        COMPOSER_NO_INTERACTION: 1
+      run: |
+        composer validate --strict
+        composer install --prefer-dist --no-progress
     
     - name: Run tests
-      run: composer test
+      run: vendor/bin/phpunit
