@@ -12,7 +12,7 @@ class ApiAuthControllerTest extends WebTestCase
     public function testRegisterEndpointExists(): void
     {
         $client = static::createClient();
-        $this->authClient($this->client);
+        $this->authClient($client);
         
         // Просто проверяем что endpoint существует и отвечает
         $client->request('POST', '/api/register', [], [], [

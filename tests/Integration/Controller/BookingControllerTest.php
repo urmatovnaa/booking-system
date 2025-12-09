@@ -22,14 +22,12 @@ class BookingControllerTest extends WebTestCase
     
     protected function setUp(): void
     {   
-        self::bootKernel();
         $this->client = static::createClient();
+        
         $this->entityManager = self::getContainer()->get('doctrine')->getManager();
         
-        // Создаем схему если не существует
         $this->createSchemaIfNotExists();
         
-        // Очищаем базу данных
         $this->clearDatabase();
         
         $this->createTestUserAndAuthenticate();
@@ -236,7 +234,6 @@ class BookingControllerTest extends WebTestCase
     
     public function testControllerMethodsExist(): void
     {
-        self::bootKernel();
         $container = static::getContainer();
         
         $this->assertTrue($container->has(\App\Controller\BookingController::class));
