@@ -16,6 +16,7 @@ class Resource
     private ?int $id = null;
 
     #[ORM\Column(length: 255)]
+    #[Assert\NotBlank(message: "Name should not be blank")]
     private ?string $name = null;
 
     #[ORM\Column(type: 'text', nullable: true)]

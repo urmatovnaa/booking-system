@@ -117,7 +117,8 @@ class BookingControllerTest extends WebTestCase
     {
         // Пробуем получить токен
         $this->client->request('POST', '/api/auth', [], [], [
-            'CONTENT_TYPE' => 'application/json'
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT' => 'application/json'
         ], json_encode([
             'email' => $this->testUser->getEmail(),
             'password' => 'TestPassword123!'
@@ -125,14 +126,19 @@ class BookingControllerTest extends WebTestCase
         
         $response = $this->client->getResponse();
         
-        if ($response->getStatusCode() === 200) {
-            $data = json_decode($response->getContent(), true);
-            $this->token = $data['token'] ?? null;
+        if ($response->getStatusCode() !== 200) {
+            throw new \RuntimeException(sprintf(
+                "Authentication failed inside setUp. Status: %d. Response: %s", 
+                $response->getStatusCode(),
+                $content
+            ));
         }
         
-        // Если не удалось получить токен, создаем мок
+        $data = json_decode($content, true);
+        $this->token = $data['token'] ?? null;
+        
         if (!$this->token) {
-            $this->token = 'mock_jwt_token_for_testing';
+            throw new \RuntimeException("Token not found in response: " . $content);
         }
     }
     
