@@ -18,70 +18,33 @@ jobs:
       with:
         php-version: '8.3'
         extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, zip, sqlite3
-        coverage: none
         tools: composer
-    
-    - name: Check PHP version
-      run: php -v
-    
-    - name: Validate composer.json
-      run: composer validate --strict
-    
-    - name: Cache Composer packages
-      id: composer-cache
-      uses: actions/cache@v3
-      with:
-        path: vendor
-        key: ${{ runner.os }}-php-8.3-${{ hashFiles('**/composer.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-php-8.3-
     
     - name: Install dependencies
       run: composer install --no-interaction --prefer-dist --no-progress
     
-    - name: Create .env.test with file-based SQLite
+    - name: Prepare .env.test (SQLite DB)
       run: |
         echo "APP_ENV=test" > .env.test
-        echo "APP_SECRET=test_secret_$(date +%s)" >> .env.test
-        echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test  # ⬅️ ФАЙЛОВАЯ БАЗА
+        echo "APP_SECRET=test" >> .env.test
+        echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test
         echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.test
         echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.test
         echo "JWT_PASSPHRASE=test_passphrase" >> .env.test
 
-    - name: Create var directory
-      run: mkdir -p var
-    
-    - name: Create JWT keys for tests
+    - name: Generate JWT keys
       run: |
         mkdir -p config/jwt
-        # Создаем тестовые JWT ключи
-        openssl genpkey -out config/jwt/private.pem -algorithm RSA -pkeyopt rsa_keygen_bits:4096 2>/dev/null || echo "JWT key creation skipped"
-        openssl pkey -in config/jwt/private.pem -out config/jwt/public.pem -pubout 2>/dev/null || echo "JWT public key creation skipped"
-    
-    - name: Prepare test environment
+        openssl genpkey -out config/jwt/private.pem -algorithm RSA -pkeyopt rsa_keygen_bits:4096
+        openssl pkey -in config/jwt/private.pem -out config/jwt/public.pem -pubout
+
+    - name: Prepare test DB
       run: |
-        # Очищаем кэш тестового окружения
+        mkdir -p var
         php bin/console cache:clear --env=test --no-warmup
-        
-        # Создаем схему базы данных (база создастся автоматически для SQLite)
         php bin/console doctrine:schema:create --env=test
-    
+
     - name: Run PHPUnit tests
       env:
         SYMFONY_DEPRECATIONS_HELPER: disabled
-      run: |
-        php bin/phpunit --no-coverage
-    - name: Setup database with verification
-      run: |
-        # Очищаем кэш
-        php bin/console cache:clear --env=test --no-warmup
-        
-        # Создаем схему
-        php bin/console doctrine:schema:create --env=test --dump-sql
-        
-        # Проверяем что схема создана
-        echo "Checking database schema..."
-        php bin/console doctrine:query:sql "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name" --env=test
-        
-        # Создаем тестовые данные если нужно
-        php bin/console doctrine:fixtures:load --env=test --no-interaction --append 2>/dev/null || echo "No fixtures found"
+      run: php bin/phpunit --no-coverage

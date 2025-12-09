@@ -6,23 +6,21 @@ use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 
 trait AuthTestTrait
 {
-    protected function authClient(KernelBrowser $client = null): KernelBrowser
+    protected function authClient(\Symfony\Bundle\FrameworkBundle\KernelBrowser $client): void
     {
-        // Если клиент не передан — создаём
-        $client = $client ?? static::createClient();
+        $container = $client->getContainer(); // ВАЖНО!!!
 
-        $container = static::getContainer();
         $em = $container->get('doctrine')->getManager();
-
-        // Ищем существующего пользователя
         $userRepository = $em->getRepository(\App\Entity\User::class);
+
         $user = $userRepository->findOneBy([]);
 
         if (!$user) {
             $user = new \App\Entity\User();
             $user->setEmail('test@example.com');
 
-            $passwordHasher = $container->get('security.user_password_hasher');
+            $passwordHasher = $container->get(\Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface::class);
+
             $user->setPassword(
                 $passwordHasher->hashPassword($user, 'password123')
             );
@@ -31,9 +29,6 @@ trait AuthTestTrait
             $em->flush();
         }
 
-        // Авторизация
         $client->loginUser($user);
-
-        return $client;
     }
 }
