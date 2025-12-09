@@ -20,7 +20,7 @@ class ResourceControllerTest extends WebTestCase
     protected function setUp(): void
     {   
         $this->client = static::createClient();
-        $this->authClient($client);
+        $this->authClient($this->client);
         $this->entityManager = self::getContainer()->get('doctrine')->getManager();
         
         $this->clearDatabase();
