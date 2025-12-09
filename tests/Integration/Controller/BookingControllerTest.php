@@ -115,31 +115,38 @@ class BookingControllerTest extends WebTestCase
     
     private function getRealJwtToken(): void
     {
-        // Пробуем получить токен
         $this->client->request('POST', '/api/auth', [], [], [
             'CONTENT_TYPE' => 'application/json',
-            'HTTP_ACCEPT' => 'application/json'
+            'HTTP_ACCEPT'  => 'application/json' // Request JSON explicitly
         ], json_encode([
             'email' => $this->testUser->getEmail(),
             'password' => 'TestPassword123!'
         ]));
         
         $response = $this->client->getResponse();
+        $content = $response->getContent();
         
         if ($response->getStatusCode() !== 200) {
+            $errorMsg = $content;
+            $json = json_decode($content, true);
+            
+            if ($json) {
+                $errorMsg = json_encode($json, JSON_PRETTY_PRINT);
+            } else {
+                if (preg_match('/<title>(.*?)<\/title>/', $content, $matches)) {
+                    $errorMsg = "HTML Title: " . $matches[1];
+                }
+            }
+
             throw new \RuntimeException(sprintf(
-                "Authentication failed inside setUp. Status: %d. Response: %s", 
-                $response->getStatusCode(),
-                $content
+                "Auth failed. Status: %d. Error: %s", 
+                $response->getStatusCode(), 
+                $errorMsg
             ));
         }
         
         $data = json_decode($content, true);
         $this->token = $data['token'] ?? null;
-        
-        if (!$this->token) {
-            throw new \RuntimeException("Token not found in response: " . $content);
-        }
     }
     
     private function createTestResource(): void

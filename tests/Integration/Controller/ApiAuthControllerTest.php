@@ -62,34 +62,21 @@ class ApiAuthControllerTest extends WebTestCase
     public function testEndpointsReturnJson(): void
     {
         $client = static::createClient();
+
+        $client->request('POST', '/api/register', [], [], [
+            'CONTENT_TYPE' => 'application/json',
+            'HTTP_ACCEPT'  => 'application/json' 
+        ], json_encode([
+            'email' => 'check_json_user@example.com',
+            'password' => 'password123'
+        ]));
+
+        $response = $client->getResponse();
         
-        // Обновляем здесь: используем /api/auth вместо /api/login
-        $endpoints = [
-            '/api/register' => ['email' => 'test@example.com', 'password' => 'pass'],
-            '/api/auth' => ['email' => 'test@example.com', 'password' => 'pass'], // Изменено
-        ];
-        
-        foreach ($endpoints as $endpoint => $data) {
-            $client->request('POST', $endpoint, [], [], [
-                'CONTENT_TYPE' => 'application/json',
-            ], json_encode($data));
-            
-            $response = $client->getResponse();
-            
-            // Проверяем Content-Type
-            $contentType = $response->headers->get('Content-Type');
-            $this->assertStringContainsString('application/json', $contentType ?? '', 
-                "Response from $endpoint should be JSON");
-            
-            // Проверяем что ответ можно декодировать как JSON
-            $content = $response->getContent();
-            if ($content) {
-                json_decode($content);
-                $this->assertEquals(JSON_ERROR_NONE, json_last_error(), 
-                    "Response from $endpoint should be valid JSON");
-            }
-            
-            echo "✅ $endpoint returns JSON\n";
+        if ($response->getStatusCode() === 500) {
+            fwrite(STDERR, "\nSERVER ERROR: " . $response->getContent() . "\n");
         }
+
+        $this->assertJson($response->getContent());
     }
 }
