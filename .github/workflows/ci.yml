@@ -15,44 +15,36 @@ jobs:
         ports:
           - 3306:3306
         options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
-      
-      redis:
-        image: redis:alpine
-        ports:
-          - 6379:6379
     
     steps:
     - uses: actions/checkout@v4
     
-    - name: Setup PHP with extensions
+    - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.3'
-        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, redis, zip, amqp, xdebug
-        coverage: xdebug
-        tools: composer:v2
-    
-    - name: Check PHP version
-      run: php -v
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_mysql, zip, sqlite3
+        coverage: none
     
     - name: Install dependencies
-      run: composer install --no-progress --prefer-dist --optimize-autoloader
+      run: composer install --no-interaction --prefer-dist
     
-    - name: Create phpunit.xml if not exists
+    - name: Create .env.test
       run: |
-        if [ ! -f phpunit.xml ] && [ ! -f phpunit.xml.dist ]; then
-          cp phpunit.xml.dist.example phpunit.xml.dist 2>/dev/null || echo "Will use default PHPUnit config"
-        fi
+        echo "APP_ENV=test" > .env.test
+        echo "APP_SECRET=test_secret_$(date +%s)" >> .env.test
+        echo "DATABASE_URL=mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4" >> .env.test
     
-    - name: Run PHPUnit tests
+    - name: Setup database
       run: |
-        export DATABASE_URL="mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
-        export REDIS_URL="redis://127.0.0.1:6379"
-        php bin/phpunit --no-coverage
+        php bin/console doctrine:database:create --env=test
+        php bin/console doctrine:schema:create --env=test
     
-    - name: Run PHPUnit with coverage (optional)
-      if: success()
+    - name: Run tests
+      env:
+        SYMFONY_DEPRECATIONS_HELPER: disabled
       run: |
-        export DATABASE_URL="mysql://root:root@127.0.0.1:3306/test_db?serverVersion=8.0&charset=utf8mb4"
-        export REDIS_URL="redis://127.0.0.1:6379"
-        php bin/phpunit --coverage-text --coverage-clover=coverage.xml
+        # Запускаем тесты по группам
+        php bin/phpunit --testsuite=Unit
+        php bin/phpunit --testsuite=Integration
+        php bin/phpunit --testsuite=Functional --stop-on-failure

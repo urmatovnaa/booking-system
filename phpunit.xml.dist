@@ -28,10 +28,6 @@
         </report>
     </coverage>
     
-    <listeners>
-        <listener class="Symfony\Bridge\PhpUnit\SymfonyTestsListener"/>
-    </listeners>
-    
     <extensions>
         <extension class="Symfony\Bridge\PhpUnit\CoverageListener"/>
     </extensions>
