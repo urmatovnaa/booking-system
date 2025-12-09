@@ -17,7 +17,7 @@ jobs:
       uses: shivammathur/setup-php@v2
       with:
         php-version: '8.3'
-        extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, zip, sqlite3  # Убрали pdo_mysql, добавили sqlite
+        extensions: mbstring, xml, ctype, iconv, intl, pdo_sqlite, zip, sqlite3
         coverage: none
         tools: composer
     
@@ -39,22 +39,20 @@ jobs:
     - name: Install dependencies
       run: composer install --no-interaction --prefer-dist --no-progress
     
-    - name: Create .env.test with SQLite
+    - name: Create .env.test with in-memory SQLite
       run: |
         echo "APP_ENV=test" > .env.test
         echo "APP_SECRET=test_secret_$(date +%s)" >> .env.test
-        echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/test.db" >> .env.test
+        echo "DATABASE_URL=sqlite:///:memory:" >> .env.test  # ⬅️ IN-MEMORY SQLite
         echo "JWT_SECRET_KEY=%kernel.project_dir%/config/jwt/private.pem" >> .env.test
         echo "JWT_PUBLIC_KEY=%kernel.project_dir%/config/jwt/public.pem" >> .env.test
         echo "JWT_PASSPHRASE=test_passphrase" >> .env.test
     
-    - name: Create var directory
-      run: mkdir -p var
-    
-    - name: Setup database (SQLite)
+    - name: Setup database (in-memory SQLite)
       run: |
-        php bin/console doctrine:database:create --env=test --if-not-exists
-        php bin/console doctrine:schema:create --env=test
+        # Для in-memory SQLite просто создаем схему
+        # База данных создается автоматически в памяти
+        php bin/console doctrine:schema:create --env=test --quiet
     
     - name: Run PHPUnit tests
       env:
